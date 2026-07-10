@@ -5,4 +5,4 @@ import io.ktor.client.engine.java.Java
 
 internal actual fun platformEngineFactory(): HttpClientEngineFactory<*> = Java
 
-internal actual val devBackendHost: String = "localhost"
+internal actual val devBackendHost: String = "localhost:80"

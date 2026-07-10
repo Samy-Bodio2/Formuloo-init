@@ -23,7 +23,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object ApiConfig {
-    val BASE_URL: String = "http://$devBackendHost:80"
+    val BASE_URL: String = "http://$devBackendHost"
 }
 
 fun createHttpClient(tokenRepository: TokenRepository): HttpClient = HttpClient(platformEngineFactory()) {
