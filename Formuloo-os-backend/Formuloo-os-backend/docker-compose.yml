@@ -1,0 +1,316 @@
+# ============================================================
+# docker-compose.yml — Formuloo OS (stack complète)
+# Passerelle nginx + Auth + HR + Compta + bases + Redis
+# ============================================================
+
+version: "2.4"
+
+services:
+
+  # ── PASSERELLE NGINX ──────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: formuloo_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - auth
+      - hr
+      - compta
+      - gesdoc
+    networks:
+      - formuloo_network
+
+  # ── SERVICE AUTH ──────────────────────────────────────────
+  auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile
+    container_name: formuloo_auth
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${AUTH_SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DB_NAME=${AUTH_DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db_auth
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - ACCESS_TOKEN_LIFETIME=${ACCESS_TOKEN_LIFETIME}
+      - REFRESH_TOKEN_LIFETIME=${REFRESH_TOKEN_LIFETIME}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+    depends_on:
+      db_auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      formuloo_network:
+        aliases:
+          - formuloo-auth
+    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --worker-class sync --timeout 120"
+
+  # ── SERVICE HR ────────────────────────────────────────────
+  hr:
+    build:
+      context: ./services/hr
+      dockerfile: Dockerfile
+    container_name: formuloo_hr
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${HR_SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DB_NAME=${HR_DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db_hr
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/1
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - AUTH_SERVICE_URL=http://formuloo-auth:8000
+      - COMPTA_SERVICE_URL=http://formuloo-compta:8002
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+    depends_on:
+      db_hr:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      formuloo_network:
+        aliases:
+          - hr_api
+
+  # ── SERVICE COMPTA ────────────────────────────────────────
+  compta:
+    build:
+      context: ./services/compta
+      dockerfile: Dockerfile
+    container_name: formuloo_compta
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${COMPTA_SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DB_NAME=${COMPTA_DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db_compta
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/2
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - AUTH_SERVICE_URL=http://formuloo-auth:8000
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+    depends_on:
+      db_compta:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      formuloo_network:
+        aliases:
+          - formuloo-compta
+    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002 --workers 1 --worker-class sync --timeout 120"
+
+  # ── SERVICE GESDOC (Gestion Documentaire OCR + Blockchain) ──
+  gesdoc:
+    build:
+      context: ./services/gesdoc
+      dockerfile: Dockerfile
+    container_name: formuloo_gesdoc
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${GESDOC_SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DB_NAME=${GESDOC_DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db_gesdoc
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/3
+      - CELERY_BROKER_URL=redis://redis:6379/4
+      - CELERY_RESULT_BACKEND=redis://redis:6379/4
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - AUTH_SERVICE_URL=http://formuloo-auth:8000
+      - COMPTA_SERVICE_URL=http://formuloo-compta:8002
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - MEDIA_ROOT=/app/media
+      - BLOCKCHAIN_NETWORK=${BLOCKCHAIN_NETWORK}
+      - INFURA_PROJECT_ID=${INFURA_PROJECT_ID}
+      - SEPOLIA_PRIVATE_KEY=${SEPOLIA_PRIVATE_KEY}
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+    volumes:
+      - gesdoc_media:/app/media
+    depends_on:
+      db_gesdoc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      formuloo_network:
+        aliases:
+          - formuloo-gesdoc
+    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8003 --workers 1 --worker-class sync --timeout 120"
+
+  # ── WORKER CELERY GESDOC (pipeline OCR + ancrage blockchain) ─
+  gesdoc_worker:
+    build:
+      context: ./services/gesdoc
+      dockerfile: Dockerfile
+    container_name: formuloo_gesdoc_worker
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${GESDOC_SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DB_NAME=${GESDOC_DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db_gesdoc
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/3
+      - CELERY_BROKER_URL=redis://redis:6379/4
+      - CELERY_RESULT_BACKEND=redis://redis:6379/4
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - COMPTA_SERVICE_URL=http://formuloo-compta:8002
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - MEDIA_ROOT=/app/media
+      - BLOCKCHAIN_NETWORK=${BLOCKCHAIN_NETWORK}
+      - INFURA_PROJECT_ID=${INFURA_PROJECT_ID}
+      - SEPOLIA_PRIVATE_KEY=${SEPOLIA_PRIVATE_KEY}
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+    volumes:
+      - gesdoc_media:/app/media
+    depends_on:
+      db_gesdoc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gesdoc:
+        condition: service_started
+    networks:
+      - formuloo_network
+    # --pool=solo --concurrency=1 : pas de threads/process forks (contrainte
+    # VM Docker Toolbox — mémoire feedback_docker_toolbox)
+    entrypoint: ["/entrypoint-worker.sh"]
+
+  # ── BASE DE DONNÉES AUTH ──────────────────────────────────
+  db_auth:
+    image: postgres:15-alpine
+    container_name: formuloo_db_auth
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=${AUTH_DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── BASE DE DONNÉES HR ────────────────────────────────────
+  db_hr:
+    image: postgres:15-alpine
+    container_name: formuloo_db_hr
+    restart: unless-stopped
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_DB=${HR_DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_hr_data:/var/lib/postgresql/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── BASE DE DONNÉES COMPTA ────────────────────────────────
+  db_compta:
+    image: postgres:15-alpine
+    container_name: formuloo_db_compta
+    restart: unless-stopped
+    ports:
+      - "5436:5432"
+    environment:
+      - POSTGRES_DB=${COMPTA_DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_compta_data:/var/lib/postgresql/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── BASE DE DONNÉES GESDOC ────────────────────────────────
+  db_gesdoc:
+    image: postgres:15-alpine
+    container_name: formuloo_db_gesdoc
+    restart: unless-stopped
+    ports:
+      - "5437:5432"
+    environment:
+      - POSTGRES_DB=${GESDOC_DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_gesdoc_data:/var/lib/postgresql/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── REDIS PARTAGÉ ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: formuloo_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ── VOLUMES ───────────────────────────────────────────────
+volumes:
+  postgres_auth_data:
+  postgres_hr_data:
+  postgres_compta_data:
+  postgres_gesdoc_data:
+  gesdoc_media:
+  redis_data:
+
+# ── RÉSEAU PARTAGÉ ────────────────────────────────────────
+networks:
+  formuloo_network:
+    driver: bridge
+    name: formuloo_network

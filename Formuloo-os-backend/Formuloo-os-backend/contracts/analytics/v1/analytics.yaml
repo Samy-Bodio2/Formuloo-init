@@ -1,0 +1,525 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — ANALYTICS SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : ANALYTICS Service
+# Version     : 1.0.0
+# Auteur      : CHOWUINOU TEGUIA
+# Date        : 2024-2025
+# Description : Contrat OpenAPI du service ANALYTICS.
+#               Toutes les données sont isolées par tenant_id.
+#               Chaque endpoint requiert un JWT valide (Bearer Token).
+#               Validé par Schemathesis dans le pipeline CI/CD GitLab.
+# Dépôt       : gitlab.formuloo.com/formuloo-contracts/formuloo-os
+# ============================================================
+
+openapi: 3.0.0
+info:
+  title: Formuloo OS — Analytics Service API
+  version: 1.0.0
+  description: >
+    Service Analytics de Formuloo OS.
+    Agrège les données de tous les microservices et produit
+    des tableaux de bord, KPIs et rapports exportables.
+
+servers:
+  - url: http://localhost:8005/api/v1
+    description: Serveur de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Tableaux de bord
+    description: Tableaux de bord et KPIs globaux
+  - name: RH Analytics
+    description: Indicateurs RH
+  - name: Finance Analytics
+    description: Indicateurs financiers
+  - name: Ventes Analytics
+    description: Indicateurs commerciaux
+  - name: Stock Analytics
+    description: Indicateurs de stock
+  - name: Rapports
+    description: Génération de rapports exportables
+
+paths:
+
+  /analytics/tableaux-bord/:
+    get:
+      tags: [Tableaux de bord]
+      summary: Tableau de bord global
+      description: Agrège les KPIs de tous les modules en un seul dashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periode
+          in: query
+          schema:
+            type: string
+            enum: [JOUR, SEMAINE, MOIS, TRIMESTRE, ANNEE]
+            default: MOIS
+        - name: devise
+          in: query
+          schema:
+            type: string
+            enum: [XAF, EUR, USD]
+            default: XAF
+      responses:
+        '200':
+          description: Tableau de bord global
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardGlobal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/rh/:
+    get:
+      tags: [RH Analytics]
+      summary: Indicateurs RH
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: annee
+          in: query
+          schema:
+            type: integer
+            example: 2024
+        - name: mois
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+      responses:
+        '200':
+          description: Indicateurs RH
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RHAnalytics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/finance/:
+    get:
+      tags: [Finance Analytics]
+      summary: Indicateurs financiers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: annee
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2024
+        - name: devise
+          in: query
+          schema:
+            type: string
+            enum: [XAF, EUR, USD]
+            default: XAF
+      responses:
+        '200':
+          description: Indicateurs financiers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceAnalytics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/ventes/:
+    get:
+      tags: [Ventes Analytics]
+      summary: Indicateurs commerciaux
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periode
+          in: query
+          schema:
+            type: string
+            enum: [MOIS, TRIMESTRE, ANNEE]
+            default: MOIS
+        - name: devise
+          in: query
+          schema:
+            type: string
+            enum: [XAF, EUR, USD]
+            default: XAF
+      responses:
+        '200':
+          description: Indicateurs ventes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentesAnalytics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/stock/:
+    get:
+      tags: [Stock Analytics]
+      summary: Indicateurs de stock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Indicateurs stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockAnalytics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/rapports/:
+    get:
+      tags: [Rapports]
+      summary: Lister les rapports disponibles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des rapports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RapportInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Rapports]
+      summary: Générer un rapport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RapportCreate'
+            example:
+              type: RAPPORT_FINANCIER
+              periode_debut: "2024-01-01"
+              periode_fin: "2024-12-31"
+              format: PDF
+              devise: XAF
+      responses:
+        '201':
+          description: Rapport généré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rapport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/rapports/{id}/telecharger/:
+    get:
+      tags: [Rapports]
+      summary: Télécharger un rapport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Fichier rapport
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+
+    DashboardGlobal:
+      type: object
+      properties:
+        periode:
+          type: string
+        devise:
+          type: string
+        rh:
+          type: object
+          properties:
+            total_employes:
+              type: integer
+            nouveaux_ce_mois:
+              type: integer
+            taux_absenteisme:
+              type: number
+        finance:
+          type: object
+          properties:
+            chiffre_affaires:
+              type: number
+            factures_en_attente:
+              type: integer
+            taux_recouvrement:
+              type: number
+        ventes:
+          type: object
+          properties:
+            nb_opportunites:
+              type: integer
+            taux_conversion:
+              type: number
+            pipeline_valeur:
+              type: number
+        stock:
+          type: object
+          properties:
+            nb_produits:
+              type: integer
+            alertes_stock:
+              type: integer
+            valeur_stock:
+              type: number
+        generated_at:
+          type: string
+          format: date-time
+
+    RHAnalytics:
+      type: object
+      properties:
+        total_employes:
+          type: integer
+        par_departement:
+          type: array
+          items:
+            type: object
+            properties:
+              departement:
+                type: string
+              nb_employes:
+                type: integer
+        par_type_contrat:
+          type: array
+          items:
+            type: object
+            properties:
+              type_contrat:
+                type: string
+              nb_employes:
+                type: integer
+        conges_en_attente:
+          type: integer
+        masse_salariale:
+          type: number
+        evolution_mensuelle:
+          type: array
+          items:
+            type: object
+            properties:
+              mois:
+                type: string
+              embauches:
+                type: integer
+              departs:
+                type: integer
+
+    FinanceAnalytics:
+      type: object
+      properties:
+        annee:
+          type: integer
+        devise:
+          type: string
+        chiffre_affaires:
+          type: number
+        total_factures:
+          type: integer
+        total_encaisse:
+          type: number
+        total_impaye:
+          type: number
+        taux_recouvrement:
+          type: number
+        evolution_mensuelle:
+          type: array
+          items:
+            type: object
+            properties:
+              mois:
+                type: string
+              ca:
+                type: number
+              encaisse:
+                type: number
+
+    VentesAnalytics:
+      type: object
+      properties:
+        nb_clients:
+          type: integer
+        nb_prospects:
+          type: integer
+        nb_opportunites:
+          type: integer
+        taux_conversion:
+          type: number
+        pipeline_valeur:
+          type: number
+        devise:
+          type: string
+        par_statut:
+          type: array
+          items:
+            type: object
+            properties:
+              statut:
+                type: string
+              nb:
+                type: integer
+              valeur:
+                type: number
+
+    StockAnalytics:
+      type: object
+      properties:
+        nb_produits:
+          type: integer
+        valeur_stock_total:
+          type: number
+        nb_alertes_stock_faible:
+          type: integer
+        produits_en_alerte:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              nom:
+                type: string
+              quantite_actuelle:
+                type: integer
+              seuil_alerte:
+                type: integer
+        mouvements_recents:
+          type: integer
+
+    RapportInfo:
+      type: object
+      properties:
+        code:
+          type: string
+        libelle:
+          type: string
+        description:
+          type: string
+        formats_disponibles:
+          type: array
+          items:
+            type: string
+            enum: [PDF, EXCEL]
+
+    RapportCreate:
+      type: object
+      required: [type, periode_debut, periode_fin, format]
+      properties:
+        type:
+          type: string
+          enum: [RAPPORT_FINANCIER, RAPPORT_RH, RAPPORT_VENTES, RAPPORT_STOCK, RAPPORT_GLOBAL]
+        periode_debut:
+          type: string
+          format: date
+        periode_fin:
+          type: string
+          format: date
+        format:
+          type: string
+          enum: [PDF, EXCEL]
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+
+    Rapport:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        format:
+          type: string
+        statut:
+          type: string
+          enum: [EN_COURS, PRET, ERREUR]
+        url_telechargement:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token JWT absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

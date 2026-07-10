@@ -1,0 +1,1694 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — AUTH SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : Auth Service (Authentification & Sécurité)
+# Version     : 1.0.0
+# Auteur      : CHOWUINOU TEGUIA
+# Description : Contrat complet du service d'authentification.
+#               Gère le SSO via Keycloak, les tokens JWT,
+#               les utilisateurs, rôles RBAC, clés API,
+#               journaux d'audit et sessions actives.
+# Dépôt       : gitlab.formuloo.com/formuloo-contracts/formuloo-os
+# ============================================================
+
+openapi: "3.0.0"
+
+info:
+  title: Formuloo OS — Auth Service API
+  version: 1.0.0
+  description: >
+    Service d'authentification et de gestion des identités de Formuloo OS.
+    Ce service est transversal à tous les microservices : il émet et valide
+    les tokens JWT via Keycloak (OAuth2/OIDC), gère les rôles RBAC,
+    assure l'isolation multi-tenant entre les PME africaines et trace
+    toutes les actions dans un journal d'audit immuable.
+  contact:
+    name: CHOWUINOU TEGUIA — Backend Developer
+    email: backend@formuloo.com
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Serveur local de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Auth
+    description: Authentification, tokens JWT et sessions actives
+  - name: Organisations
+    description: Gestion des organisations (tenants) — SUPER_ADMIN uniquement
+  - name: Utilisateurs
+    description: Gestion des comptes utilisateurs par tenant
+  - name: Roles
+    description: Gestion des rôles RBAC par tenant
+  - name: Permissions
+    description: Consultation des permissions disponibles — lecture seule
+  - name: API Keys
+    description: Gestion des clés API pour les intégrations tierces
+  - name: Audit
+    description: Journaux d'audit immuables des actions utilisateurs
+
+# ============================================================
+# ENDPOINTS
+# Convention : /api/v1/auth/{ressource}/
+# ============================================================
+paths:
+
+  # ----------------------------------------------------------
+  # AUTHENTIFICATION
+  # ----------------------------------------------------------
+
+  /auth/login/:
+    post:
+      tags: [Auth]
+      summary: Connexion utilisateur
+      description: >
+        Authentifie un utilisateur avec son email et mot de passe.
+        Retourne un Access Token (15 min) et un Refresh Token (7 jours).
+        Le JWT contient user_id, tenant_id, roles et exp.
+        Un AuditLog LOGIN est créé automatiquement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: admin@pme-alpha.com
+              password: "motdepasse123"
+      responses:
+        '200':
+          description: Connexion réussie — tokens JWT retournés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                access: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                refresh: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                user:
+                  id: "4388ffa0-c5fa-4136-9270-0abadc873747"
+                  email: "admin@pme-alpha.com"
+                  first_name: "Jean"
+                  last_name: "Dupont"
+                  roles: ["ADMIN_PME"]
+                  tenant_id: "uuid-pme-alpha"
+                  is_active: true
+                  is_verified: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout/:
+    post:
+      tags: [Auth]
+      summary: Déconnexion utilisateur
+      description: >
+        Blackliste le refresh token via Redis.
+        L'access token expire naturellement après 15 minutes.
+        Un AuditLog LOGOUT est créé automatiquement.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+            example:
+              refresh: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '204':
+          description: Déconnexion réussie — aucun contenu retourné
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh/:
+    post:
+      tags: [Auth]
+      summary: Renouveler le token d'accès
+      description: >
+        Génère un nouveau Access Token (15 min) à partir d'un
+        Refresh Token valide (7 jours). Si le Refresh Token est
+        expiré ou blacklisté, l'utilisateur doit se reconnecter.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+            example:
+              refresh: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: Nouveau Access Token généré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me/:
+    get:
+      tags: [Auth]
+      summary: Profil de l'utilisateur connecté
+      description: >
+        Retourne les informations complètes de l'utilisateur authentifié :
+        nom, email, rôles, tenant_id et statut du compte.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profil de l'utilisateur connecté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [Auth]
+      summary: Modifier le profil de l'utilisateur connecté
+      description: >
+        Modifie les informations du profil de l'utilisateur connecté.
+        Seuls first_name, last_name et avatar_url sont modifiables.
+        Un AuditLog UPDATE_PROFILE est créé automatiquement.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+            example:
+              first_name: "Jean-Pierre"
+              last_name: "Dupont"
+      responses:
+        '200':
+          description: Profil modifié avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me/changer-mot-de-passe/:
+    post:
+      tags: [Auth]
+      summary: Changer le mot de passe
+      description: >
+        Permet à l'utilisateur connecté de changer son mot de passe.
+        L'ancien mot de passe est requis pour confirmer l'identité.
+        Un AuditLog CHANGE_PASSWORD est créé automatiquement.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangerMotDePasseRequest'
+            example:
+              ancien_mot_de_passe: "ancien123"
+              nouveau_mot_de_passe: "nouveau456"
+      responses:
+        '204':
+          description: Mot de passe modifié avec succès
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ----------------------------------------------------------
+  # SESSIONS ACTIVES (REFRESH TOKENS)
+  # ----------------------------------------------------------
+
+  /auth/refresh-tokens/:
+    get:
+      tags: [Auth]
+      summary: Lister les sessions actives
+      description: >
+        Retourne la liste des sessions actives (refresh tokens non blacklistés)
+        de l'utilisateur connecté. Permet de voir les appareils connectés.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des sessions actives
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RefreshToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh-tokens/{id}/:
+    delete:
+      tags: [Auth]
+      summary: Révoquer une session
+      description: >
+        Blackliste un refresh token — révoque une session active.
+        Utile pour se déconnecter d'un appareil spécifique.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Session révoquée avec succès
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # ORGANISATIONS (TENANTS)
+  # ----------------------------------------------------------
+
+  /auth/organisations/:
+    get:
+      tags: [Organisations]
+      summary: Lister les organisations
+      description: >
+        Retourne la liste de toutes les organisations (PME clientes).
+        Réservé au SUPER_ADMIN — un ADMIN_PME ne peut pas lister
+        les organisations des autres PME.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des organisations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organisation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Organisations]
+      summary: Créer une organisation
+      description: >
+        Crée une nouvelle organisation (PME cliente) dans Formuloo OS.
+        Réservé au SUPER_ADMIN. Un AuditLog CREATE_ORGANISATION est créé.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreate'
+            example:
+              slug: pme-alpha
+              name: PME Alpha Cameroun
+              currency: XAF
+              locale: fr
+      responses:
+        '201':
+          description: Organisation créée avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organisation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/organisations/{id}/:
+    get:
+      tags: [Organisations]
+      summary: Détail d'une organisation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Organisation trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organisation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Organisations]
+      summary: Modifier une organisation
+      description: >
+        Modifie les informations d'une organisation.
+        Réservé au SUPER_ADMIN.
+        Un AuditLog UPDATE_ORGANISATION est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreate'
+      responses:
+        '200':
+          description: Organisation modifiée avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organisation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Organisations]
+      summary: Supprimer une organisation
+      description: >
+        Supprime définitivement une organisation et toutes ses données.
+        Réservé au SUPER_ADMIN. Action irréversible.
+        Un AuditLog DELETE_ORGANISATION est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Organisation supprimée
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # UTILISATEURS
+  # ----------------------------------------------------------
+
+  /auth/utilisateurs/:
+    get:
+      tags: [Utilisateurs]
+      summary: Lister les utilisateurs du tenant
+      description: >
+        Retourne la liste paginée des utilisateurs appartenant
+        au tenant de l'utilisateur connecté.
+        Isolation multi-tenant garantie — impossible d'accéder
+        aux utilisateurs d'une autre organisation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Liste paginée des utilisateurs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsers'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Utilisateurs]
+      summary: Créer un nouvel utilisateur
+      description: >
+        Crée un nouveau compte utilisateur dans le tenant courant.
+        Si l'utilisateur connecté est ADMIN_PME, tenant_id est
+        extrait automatiquement du JWT.
+        Si l'utilisateur connecté est SUPER_ADMIN, tenant_id
+        doit être fourni explicitement dans le body.
+        Un AuditLog CREATE_USER est créé automatiquement.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+            example:
+              email: employe@pme-alpha.com
+              first_name: Marie
+              last_name: Ngo
+              password: "motdepasse123"
+              tenant_id: "uuid-pme-alpha"
+      responses:
+        '201':
+          description: Utilisateur créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/utilisateurs/{id}/:
+    get:
+      tags: [Utilisateurs]
+      summary: Détail d'un utilisateur
+      description: >
+        Retourne les informations d'un utilisateur du tenant courant.
+        Retourne 404 si l'utilisateur appartient à un autre tenant.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Utilisateur trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Utilisateurs]
+      summary: Modifier un utilisateur
+      description: >
+        Modifie les informations d'un utilisateur du tenant courant.
+        Un AuditLog UPDATE_USER est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Utilisateur modifié avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Utilisateurs]
+      summary: Supprimer un utilisateur (soft delete)
+      description: >
+        Désactive le compte utilisateur sans suppression physique.
+        Les données sont conservées pour l'historique des AuditLogs.
+        Un AuditLog DELETE_USER est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Utilisateur désactivé
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/utilisateurs/{id}/activer/:
+    post:
+      tags: [Utilisateurs]
+      summary: Activer un compte utilisateur
+      description: >
+        Active un compte utilisateur précédemment désactivé.
+        Un AuditLog ACTIVATE_USER est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Utilisateur activé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+              example:
+                message: Utilisateur activé avec succès.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/utilisateurs/{id}/desactiver/:
+    post:
+      tags: [Utilisateurs]
+      summary: Désactiver un compte utilisateur
+      description: >
+        Désactive un compte utilisateur actif.
+        Un AuditLog DEACTIVATE_USER est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Utilisateur désactivé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+              example:
+                message: Utilisateur désactivé avec succès.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/utilisateurs/{id}/roles/:
+    get:
+      tags: [Utilisateurs]
+      summary: Lister les rôles d'un utilisateur
+      description: >
+        Retourne la liste des rôles assignés à un utilisateur
+        du tenant courant.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Liste des rôles de l'utilisateur
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleBrief'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Utilisateurs]
+      summary: Assigner un rôle à un utilisateur
+      description: >
+        Assigne un rôle à un utilisateur du tenant courant.
+        Un AuditLog ASSIGN_ROLE est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  description: Code du rôle à assigner
+                  example: RH_MANAGER
+      responses:
+        '200':
+          description: Rôle assigné avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # ROLES
+  # ----------------------------------------------------------
+
+  /auth/roles/:
+    get:
+      tags: [Roles]
+      summary: Lister les rôles du tenant
+      description: >
+        Retourne tous les rôles RBAC disponibles dans le tenant courant
+        avec leurs permissions associées.
+        Inclut les rôles système (is_system=true) et les rôles
+        personnalisés créés par l'ADMIN_PME.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des rôles et leurs permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Roles]
+      summary: Créer un rôle personnalisé
+      description: >
+        Crée un nouveau rôle personnalisé dans le tenant courant.
+        Réservé à l'ADMIN_PME.
+        Un AuditLog CREATE_ROLE est créé automatiquement.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+            example:
+              name: Chef Comptable
+              code: CHEF_COMPTABLE
+              permissions:
+                - compta.read.factures
+                - compta.write.factures
+                - compta.read.bilans
+      responses:
+        '201':
+          description: Rôle créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/roles/{id}/:
+    get:
+      tags: [Roles]
+      summary: Détail d'un rôle
+      description: >
+        Retourne les informations complètes d'un rôle avec
+        la liste détaillée de ses permissions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Rôle trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Roles]
+      summary: Modifier un rôle
+      description: >
+        Modifie un rôle personnalisé du tenant courant.
+        Les rôles système (is_system=true) ne peuvent pas être modifiés.
+        Un AuditLog UPDATE_ROLE est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '200':
+          description: Rôle modifié avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Roles]
+      summary: Supprimer un rôle
+      description: >
+        Supprime un rôle personnalisé du tenant courant.
+        Les rôles système (is_system=true) ne peuvent pas être supprimés.
+        Un AuditLog DELETE_ROLE est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Rôle supprimé
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # PERMISSIONS
+  # ----------------------------------------------------------
+
+  /auth/permissions/:
+    get:
+      tags: [Permissions]
+      summary: Lister les permissions disponibles
+      description: >
+        Retourne toutes les permissions disponibles dans le système.
+        Les permissions sont immuables — elles sont créées automatiquement
+        au démarrage de l'application.
+        Format du code : module.action.ressource
+        Exemple : hr.read.employes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste de toutes les permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Permission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/permissions/{id}/:
+    get:
+      tags: [Permissions]
+      summary: Détail d'une permission
+      description: >
+        Retourne les informations d'une permission spécifique.
+        Lecture seule — les permissions ne peuvent pas être modifiées.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Permission trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # CLÉS API
+  # ----------------------------------------------------------
+
+  /auth/api-keys/:
+    get:
+      tags: [API Keys]
+      summary: Lister les clés API
+      description: >
+        Retourne la liste des clés API du tenant courant.
+        Note : la clé brute n'est jamais retournée — seulement
+        les métadonnées (nom, scopes, statut, expiration).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des clés API
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/APIKey'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [API Keys]
+      summary: Créer une clé API
+      description: >
+        Génère une nouvelle clé API pour les intégrations tierces.
+        La clé brute est retournée UNE SEULE FOIS dans la réponse.
+        Elle ne sera plus accessible après — à conserver précieusement.
+        Un AuditLog CREATE_APIKEY est créé automatiquement.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreate'
+            example:
+              name: Intégration Mobile Money
+              scopes:
+                - compta.read.factures
+                - compta.write.paiements
+              rate_limit: 100
+      responses:
+        '201':
+          description: Clé API créée — conserver la clé brute
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKeyCreated'
+              example:
+                id: "uuid-api-key"
+                name: Intégration Mobile Money
+                key: "fk_live_abc123def456..."
+                scopes:
+                  - compta.read.factures
+                rate_limit: 100
+                created_at: "2026-06-08T21:00:00Z"
+                message: Conservez cette clé — elle ne sera plus affichée.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/api-keys/{id}/:
+    get:
+      tags: [API Keys]
+      summary: Détail d'une clé API
+      description: >
+        Retourne les métadonnées d'une clé API.
+        La clé brute n'est jamais retournée.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Clé API trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKey'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [API Keys]
+      summary: Révoquer une clé API
+      description: >
+        Désactive une clé API — elle ne pourra plus être utilisée
+        pour s'authentifier.
+        Un AuditLog REVOKE_APIKEY est créé automatiquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Clé API révoquée avec succès
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ----------------------------------------------------------
+  # AUDIT LOGS
+  # ----------------------------------------------------------
+
+  /auth/audit-logs/:
+    get:
+      tags: [Audit]
+      summary: Lister les journaux d'audit
+      description: >
+        Retourne l'historique immuable et paginé des actions effectuées
+        dans le tenant courant. Lecture seule — les journaux ne peuvent
+        jamais être modifiés ou supprimés.
+        Réservé à l'ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Liste paginée des journaux d'audit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/audit-logs/{id}/:
+    get:
+      tags: [Audit]
+      summary: Détail d'un journal d'audit
+      description: >
+        Retourne les informations complètes d'une entrée du journal
+        d'audit. Lecture seule et immuable.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Journal d'audit trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ============================================================
+# COMPOSANTS RÉUTILISABLES
+# ============================================================
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token JWT émis par Keycloak (OAuth2/OIDC).
+        Format : Authorization: Bearer <access_token>
+        Durée de vie : 15 minutes.
+
+  parameters:
+    UuidId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant unique UUID de la ressource
+      schema:
+        type: string
+        format: uuid
+        example: "4388ffa0-c5fa-4136-9270-0abadc873747"
+
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Numéro de la page (commence à 1)
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      description: Nombre d'éléments par page (max 100)
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+    Search:
+      name: search
+      in: query
+      required: false
+      description: Recherche textuelle (nom, email)
+      schema:
+        type: string
+
+  schemas:
+
+    # ── AUTHENTIFICATION ──────────────────────────────────
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email de l'utilisateur — identifiant de connexion
+          example: admin@pme-alpha.com
+        password:
+          type: string
+          format: password
+          description: Mot de passe (min 8 caractères)
+          minLength: 8
+
+    LogoutRequest:
+      type: object
+      required: [refresh]
+      properties:
+        refresh:
+          type: string
+          description: Refresh Token à blacklister
+
+    RefreshRequest:
+      type: object
+      required: [refresh]
+      properties:
+        refresh:
+          type: string
+          description: Refresh Token valide (7 jours)
+
+    ChangerMotDePasseRequest:
+      type: object
+      required: [ancien_mot_de_passe, nouveau_mot_de_passe]
+      properties:
+        ancien_mot_de_passe:
+          type: string
+          format: password
+          description: Ancien mot de passe pour confirmation
+        nouveau_mot_de_passe:
+          type: string
+          format: password
+          minLength: 8
+          description: Nouveau mot de passe (min 8 caractères)
+
+    TokenResponse:
+      type: object
+      properties:
+        access:
+          type: string
+          description: Access Token JWT — valable 15 minutes
+        refresh:
+          type: string
+          description: Refresh Token — valable 7 jours
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    # ── UTILISATEURS ──────────────────────────────────────
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifiant unique UUID
+        email:
+          type: string
+          format: email
+          description: Email — identifiant de connexion
+        first_name:
+          type: string
+          description: Prénom
+        last_name:
+          type: string
+          description: Nom de famille
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de l'avatar (optionnel)
+        roles:
+          type: array
+          description: Codes des rôles RBAC assignés
+          items:
+            type: string
+          example: ["ADMIN_PME", "RH_MANAGER"]
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Identifiant de l'organisation (PME)
+        is_active:
+          type: boolean
+          description: Indique si le compte est actif
+        is_verified:
+          type: boolean
+          description: Indique si l'email est vérifié
+        created_at:
+          type: string
+          format: date-time
+          description: Date de création du compte
+        updated_at:
+          type: string
+          format: date-time
+          description: Date de dernière modification
+
+    UserCreate:
+      type: object
+      required: [email, first_name, last_name, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email unique dans le tenant — identifiant de connexion
+        first_name:
+          type: string
+          description: Prénom
+        last_name:
+          type: string
+          description: Nom de famille
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de l'avatar (optionnel)
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Mot de passe initial (min 8 caractères)
+        role:
+          type: string
+          description: Code du rôle à assigner (optionnel)
+          example: RH_MANAGER
+        tenant_id:
+          type: string
+          format: uuid
+          description: >
+            Requis si l'utilisateur connecté est SUPER_ADMIN.
+            Ignoré si l'utilisateur connecté est ADMIN_PME
+            (tenant extrait automatiquement du JWT).
+
+    UserUpdate:
+      type: object
+      description: Tous les champs sont optionnels
+      properties:
+        first_name:
+          type: string
+          description: Prénom
+        last_name:
+          type: string
+          description: Nom de famille
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        is_active:
+          type: boolean
+          description: Activation/désactivation du compte
+
+    PaginatedUsers:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Nombre total d'utilisateurs dans le tenant
+        next:
+          type: string
+          nullable: true
+          description: URL de la page suivante (null si dernière page)
+        previous:
+          type: string
+          nullable: true
+          description: URL de la page précédente (null si première page)
+        results:
+          type: array
+          description: Liste des utilisateurs de la page courante
+          items:
+            $ref: '#/components/schemas/UserProfile'
+
+    # ── ORGANISATIONS ─────────────────────────────────────
+
+    Organisation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifiant unique UUID
+        slug:
+          type: string
+          description: Identifiant URL-friendly unique
+          example: pme-alpha
+        name:
+          type: string
+          description: Nom de l'organisation
+          example: PME Alpha Cameroun
+        currency:
+          type: string
+          description: Devise principale
+          example: XAF
+        locale:
+          type: string
+          enum: [fr, en, pt]
+          description: Langue principale de l'organisation
+          example: fr
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrganisationCreate:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          description: Identifiant URL-friendly unique (ex. pme-alpha)
+          example: pme-alpha
+        name:
+          type: string
+          description: Nom complet de l'organisation
+          example: PME Alpha Cameroun
+        currency:
+          type: string
+          default: XAF
+          description: Devise principale (XAF, EUR, USD)
+          example: XAF
+        locale:
+          type: string
+          enum: [fr, en, pt]
+          default: fr
+          description: Langue principale
+
+    # ── ROLES ET PERMISSIONS ──────────────────────────────
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Libellé lisible du rôle
+          example: Responsable RH
+        code:
+          type: string
+          description: Code unique du rôle dans le tenant
+          example: RH_MANAGER
+        is_system:
+          type: boolean
+          description: >
+            Rôle système créé par Formuloo (true) ou
+            rôle personnalisé créé par l'ADMIN_PME (false).
+            Les rôles système ne peuvent pas être modifiés.
+        permissions:
+          type: array
+          description: Codes des permissions associées au rôle
+          items:
+            type: string
+          example:
+            - hr.read.employes
+            - hr.write.employes
+            - hr.read.conges
+        created_at:
+          type: string
+          format: date-time
+
+    RoleBrief:
+      type: object
+      description: Version simplifiée du rôle pour les listes
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+
+    RoleCreate:
+      type: object
+      required: [name, code]
+      properties:
+        name:
+          type: string
+          description: Libellé du rôle
+          example: Chef Comptable
+        code:
+          type: string
+          description: Code unique du rôle dans le tenant
+          example: CHEF_COMPTABLE
+        permissions:
+          type: array
+          description: Codes des permissions à assigner au rôle
+          items:
+            type: string
+          example:
+            - compta.read.factures
+            - compta.write.factures
+
+    Permission:
+      type: object
+      description: >
+        Permission immuable définie par le système.
+        Format du code : module.action.ressource
+      properties:
+        id:
+          type: string
+          format: uuid
+        module:
+          type: string
+          enum: [auth, hr, compta, crm, stock, analytics]
+          description: Module fonctionnel concerné
+          example: hr
+        action:
+          type: string
+          enum: [read, write, delete]
+          description: Type d'action autorisée
+          example: read
+        resource:
+          type: string
+          description: Ressource concernée dans le module
+          example: employes
+        code:
+          type: string
+          description: Code auto-généré (module.action.resource)
+          example: hr.read.employes
+
+    # ── CLÉS API ──────────────────────────────────────────
+
+    APIKey:
+      type: object
+      description: >
+        Métadonnées d'une clé API.
+        La clé brute n'est jamais retournée après la création.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Nom descriptif de la clé
+          example: Intégration Mobile Money
+        scopes:
+          type: array
+          description: Permissions accordées à cette clé
+          items:
+            type: string
+          example:
+            - compta.read.factures
+            - compta.write.paiements
+        rate_limit:
+          type: integer
+          description: Nombre de requêtes autorisées par heure
+          example: 100
+        is_active:
+          type: boolean
+          description: Indique si la clé est active
+        last_used:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date et heure de la dernière utilisation
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date d'expiration (null = pas d'expiration)
+        created_at:
+          type: string
+          format: date-time
+
+    APIKeyCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Nom descriptif de la clé
+          example: Intégration Mobile Money
+        scopes:
+          type: array
+          description: Permissions à accorder à la clé
+          items:
+            type: string
+          default: []
+        rate_limit:
+          type: integer
+          description: Requêtes autorisées par heure
+          default: 100
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date d'expiration (optionnel)
+
+    APIKeyCreated:
+      type: object
+      description: >
+        Retourné uniquement lors de la création.
+        La clé brute ne sera plus accessible après cette réponse.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        key:
+          type: string
+          description: Clé brute — À CONSERVER PRÉCIEUSEMENT
+          example: "fk_live_abc123def456ghi789..."
+        scopes:
+          type: array
+          items:
+            type: string
+        rate_limit:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        message:
+          type: string
+          example: Conservez cette clé — elle ne sera plus affichée.
+
+    # ── AUDIT LOGS ────────────────────────────────────────
+
+    AuditLog:
+      type: object
+      description: >
+        Journal d'audit immuable — ne peut jamais être modifié
+        ou supprimé. Trace toutes les actions importantes.
+      properties:
+        id:
+          type: string
+          format: uuid
+        user:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID de l'utilisateur ayant effectué l'action
+        action:
+          type: string
+          description: >
+            Code de l'action effectuée.
+            Exemples : LOGIN, LOGOUT, CREATE_USER, UPDATE_ROLE...
+          example: LOGIN
+        resource:
+          type: string
+          description: Type de ressource concernée
+          example: User
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID de la ressource concernée
+        payload:
+          type: object
+          description: Données associées à l'action
+          example:
+            email: admin@pme-alpha.com
+        ip_address:
+          type: string
+          nullable: true
+          description: Adresse IP de l'auteur de l'action
+          example: "192.168.1.1"
+        timestamp:
+          type: string
+          format: date-time
+          description: Date et heure immuables de l'action
+
+    PaginatedAuditLogs:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Nombre total de journaux dans le tenant
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+
+    # ── REFRESH TOKENS (SESSIONS) ─────────────────────────
+
+    RefreshToken:
+      type: object
+      description: Session active représentée par un refresh token
+      properties:
+        id:
+          type: string
+          format: uuid
+        is_blacklisted:
+          type: boolean
+          description: Indique si la session est révoquée
+        created_at:
+          type: string
+          format: date-time
+          description: Date de création de la session
+        expires_at:
+          type: string
+          format: date-time
+          description: Date d'expiration de la session (7 jours)
+        blacklisted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date de révocation (null si session active)
+
+    # ── UTILITAIRES ───────────────────────────────────────
+
+    SuccessMessage:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Message de confirmation de l'opération
+          example: Opération effectuée avec succès.
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Code machine de l'erreur
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Message lisible décrivant l'erreur
+              example: Les données fournies sont invalides.
+            details:
+              type: array
+              description: Détails des erreurs de validation par champ
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    description: Nom du champ concerné
+                    example: email
+                  message:
+                    type: string
+                    description: Message d'erreur pour ce champ
+                    example: Ce champ est obligatoire.
+
+  # ── RÉPONSES RÉUTILISABLES ────────────────────────────
+
+  responses:
+
+    BadRequest:
+      description: Données invalides — vérifier le format et les champs
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Les données fournies sont invalides.
+              details:
+                - field: email
+                  message: Ce champ est obligatoire.
+
+    Unauthorized:
+      description: Token JWT absent, expiré ou révoqué
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: AUTHENTICATION_FAILED
+              message: Token JWT invalide ou expiré.
+
+    Forbidden:
+      description: Permissions insuffisantes pour cette action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: PERMISSION_DENIED
+              message: Vous n'avez pas les permissions nécessaires.
+
+    NotFound:
+      description: Ressource introuvable ou appartenant à un autre tenant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: La ressource demandée n'existe pas.

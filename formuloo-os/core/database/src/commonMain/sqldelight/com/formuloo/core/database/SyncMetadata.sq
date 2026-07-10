@@ -1,0 +1,13 @@
+CREATE TABLE syncMetadata (
+    entity TEXT NOT NULL PRIMARY KEY,
+    lastSyncedAt INTEGER NOT NULL DEFAULT 0
+);
+
+selectByEntity:
+SELECT *
+FROM syncMetadata
+WHERE entity = ?;
+
+upsert:
+INSERT OR REPLACE INTO syncMetadata(entity, lastSyncedAt)
+VALUES (?, ?);

@@ -1,0 +1,44 @@
+Django==4.2.13
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+drf-spectacular==0.27.2
+django-cors-headers==4.3.1
+django-environ==0.11.2
+django-redis==6.0.0
+psycopg2-binary==2.9.9
+gunicorn==21.2.0
+redis==5.0.4
+celery==5.3.6
+requests==2.34.2
+
+# ── Pipeline OCR ───────────────────────────────────────────
+# Tesseract5 (moteur principal) + EasyOCR (fallback) + extraction par
+# regex uniquement — pas de CamemBERT/spaCy (trop lourd pour la VM
+# Docker Toolbox à 1 CPU / 2 Go RAM, voir feedback_docker_toolbox).
+# numpy pincé à 1.26.4 : opencv 4.8.1.78 est compilé avec numpy 1.x ABI
+# (numpy 2.x casse l'import cv2 avec "numpy.core.multiarray failed to import").
+numpy==1.26.4
+opencv-python-headless==4.8.1.78
+pytesseract==0.3.10
+easyocr==1.7.1
+# torch + torchvision CPU-only : gérés EXCLUSIVEMENT dans le Dockerfile
+# (étape RUN séparée avec --index-url https://download.pytorch.org/whl/cpu).
+# NE PAS lister ici — pip resoudrait depuis PyPI et installerait la version
+# CUDA (~2 Go inutiles) en écrasant le wheel CPU déjà en place.
+pdf2image==1.17.0
+Pillow==10.3.0
+
+# ── Blockchain ─────────────────────────────────────────────
+web3==6.20.1
+
+# ── PDF ────────────────────────────────────────────────────
+reportlab==4.2.0
+
+# ── Tests ──────────────────────────────────────────────────
+pytest==8.2.2
+pytest-django==4.8.0
+pytest-cov==7.1.0
+factory-boy==3.3.0
+Faker==25.2.0
+coverage==7.14.1
+ruff==0.4.4

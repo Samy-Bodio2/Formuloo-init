@@ -1,0 +1,99 @@
+# ──────────────────────────────────────────────────────────
+# docker-compose.yml — Service RH — Formuloo OS
+# Orchestration des conteneurs du service RH
+#
+# Services :
+#   hr_api   → Django + Gunicorn (port 8001)
+#   hr_db    → PostgreSQL 15 (port 5434)
+#   hr_redis → Redis 7 (port 6380)
+#
+# Usage :
+#   docker-compose up -d        → démarrer
+#   docker-compose down         → arrêter
+#   docker-compose logs -f      → voir les logs
+#   docker-compose ps           → voir le statut
+# ──────────────────────────────────────────────────────────
+
+version: '3.7'
+
+services:
+
+  # ── Service Django RH ──────────────────────────────────
+  hr_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hr_api
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.99.100,*}
+      - DB_NAME=db_hr
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=hr_db
+      - DB_PORT=5432
+      - REDIS_URL=redis://hr_redis:6379/1
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth:8000}
+      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+    depends_on:
+      - hr_db
+      - hr_redis
+    volumes:
+      - static_volume:/app/staticfiles
+    networks:
+      - hr_network
+      - formuloo_network
+
+  # ── Base de données PostgreSQL ─────────────────────────
+  hr_db:
+    image: postgres:15-alpine
+    container_name: hr_db
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_DB=db_hr
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      # Données persistantes
+      # Les données survivent aux redémarrages
+      - hr_db_data:/var/lib/postgresql/data
+    networks:
+      - hr_network
+
+  # ── Cache Redis ────────────────────────────────────────
+  hr_redis:
+    image: redis:7-alpine
+    container_name: hr_redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    networks:
+      - hr_network
+
+# ── Volumes persistants ────────────────────────────────────
+volumes:
+  # Données PostgreSQL
+  hr_db_data:
+  # Fichiers statiques Django
+  static_volume:
+
+# ── Réseaux ───────────────────────────────────────────────
+networks:
+  # Réseau interne du service RH
+  # hr_api, hr_db, hr_redis communiquent ici
+  hr_network:
+    driver: bridge
+
+  # Réseau partagé Formuloo OS
+  # Permet à Auth et RH de communiquer
+  # Créé par le service Auth
+  formuloo_network:
+    external: true
+    name: formuloo_network

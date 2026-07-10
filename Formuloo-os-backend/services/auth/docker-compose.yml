@@ -1,0 +1,93 @@
+# ============================================================
+# docker-compose.yml — Formuloo OS
+# Service Auth + PostgreSQL + Redis
+# Conforme ADR-001 : Architecture Microservices
+# Conforme ADR-004 : PostgreSQL + Redis
+# ============================================================
+
+version: '3.7'
+
+services:
+
+  # ── SERVICE AUTH ─────────────────────────────────────────
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: formuloo_auth
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db_auth
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - ACCESS_TOKEN_LIFETIME=${ACCESS_TOKEN_LIFETIME}
+      - REFRESH_TOKEN_LIFETIME=${REFRESH_TOKEN_LIFETIME}
+    depends_on:
+      - db_auth
+      - redis
+    networks:
+      formuloo_network:
+        aliases:
+          - formuloo-auth
+    command: >
+      sh -c "python manage.py migrate &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 1 --timeout 120"
+
+  # ── BASE DE DONNÉES AUTH ──────────────────────────────────
+  db_auth:
+    image: postgres:15-alpine
+    container_name: formuloo_db_auth
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── REDIS ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: formuloo_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - formuloo_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ── VOLUMES PERSISTANTS ───────────────────────────────────
+volumes:
+  postgres_auth_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ── RÉSEAU ────────────────────────────────────────────────
+networks:
+  formuloo_network:
+    driver: bridge
+    name: formuloo_network

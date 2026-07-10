@@ -1,0 +1,39 @@
+-- Lecture seule, mise en cache simple après consultation côté serveur.
+CREATE TABLE PayslipEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    employee_id TEXT NOT NULL,
+    period TEXT NOT NULL,
+    mois INTEGER NOT NULL,
+    annee INTEGER NOT NULL,
+    gross REAL NOT NULL,
+    prime_transport REAL NOT NULL,
+    prime_logement REAL NOT NULL,
+    prime_rendement REAL NOT NULL,
+    autres_primes REAL NOT NULL,
+    cotisation_cnps REAL NOT NULL,
+    impot_irpp REAL NOT NULL,
+    credit_logement REAL NOT NULL,
+    autres_deductions REAL NOT NULL,
+    net_salary REAL NOT NULL,
+    currency TEXT NOT NULL,
+    status TEXT NOT NULL,
+    paid_at TEXT,
+    pdf_url TEXT,
+    cached_at TEXT NOT NULL
+);
+
+getByEmployeeId:
+SELECT * FROM PayslipEntity WHERE employee_id = :employeeId ORDER BY annee DESC, mois DESC;
+
+getByEmployeeIdAndYear:
+SELECT * FROM PayslipEntity WHERE employee_id = :employeeId AND annee = :annee ORDER BY mois DESC;
+
+upsert:
+INSERT OR REPLACE INTO PayslipEntity(
+    id, employee_id, period, mois, annee, gross, prime_transport, prime_logement,
+    prime_rendement, autres_primes, cotisation_cnps, impot_irpp, credit_logement,
+    autres_deductions, net_salary, currency, status, paid_at, pdf_url, cached_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteByEmployeeId:
+DELETE FROM PayslipEntity WHERE employee_id = :employeeId;

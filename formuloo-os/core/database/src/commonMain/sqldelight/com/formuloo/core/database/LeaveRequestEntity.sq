@@ -1,0 +1,46 @@
+CREATE TABLE LeaveRequestEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    employee_id TEXT NOT NULL,
+    employee_name TEXT NOT NULL,
+    employee_initials TEXT NOT NULL,
+    type_code TEXT NOT NULL,
+    type_libelle TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    days INTEGER NOT NULL,
+    reason TEXT,
+    status TEXT NOT NULL,
+    approved_by_name TEXT,
+    approved_at TEXT,
+    is_pending_sync INTEGER NOT NULL DEFAULT 0,
+    sync_attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+getAll:
+SELECT * FROM LeaveRequestEntity ORDER BY created_at DESC;
+
+getPendingSync:
+SELECT * FROM LeaveRequestEntity WHERE is_pending_sync = 1 ORDER BY created_at ASC;
+
+getByEmployeeId:
+SELECT * FROM LeaveRequestEntity WHERE employee_id = :employeeId ORDER BY start_date DESC;
+
+upsert:
+INSERT OR REPLACE INTO LeaveRequestEntity(
+    id, employee_id, employee_name, employee_initials, type_code, type_libelle,
+    start_date, end_date, days, reason, status, approved_by_name, approved_at,
+    is_pending_sync, sync_attempts, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+replaceLocalIdWithServerId:
+UPDATE LeaveRequestEntity SET id = :serverId, is_pending_sync = 0 WHERE id = :localId;
+
+deleteAllSynced:
+DELETE FROM LeaveRequestEntity WHERE is_pending_sync = 0;
+
+incrementSyncAttempts:
+UPDATE LeaveRequestEntity SET sync_attempts = sync_attempts + 1 WHERE id = :id;
+
+deleteById:
+DELETE FROM LeaveRequestEntity WHERE id = :id;

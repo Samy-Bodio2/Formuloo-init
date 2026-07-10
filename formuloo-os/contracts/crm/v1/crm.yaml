@@ -1,0 +1,556 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — CRM SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : CRM Service
+# Version     : 1.0.0
+# Auteur      : CHOWUINOU TEGUIA
+# Date        : 2024-2025
+# Description : Contrat OpenAPI du service CRM.
+#               Toutes les données sont isolées par tenant_id.
+#               Chaque endpoint requiert un JWT valide (Bearer Token).
+#               Validé par Schemathesis dans le pipeline CI/CD GitLab.
+# Dépôt       : gitlab.formuloo.com/formuloo-contracts/formuloo-os
+# ============================================================
+
+openapi: 3.0.0
+info:
+  title: Formuloo OS — CRM Service API
+  version: 1.0.0
+  description: >
+    Service de gestion de la relation client de Formuloo OS.
+    Gère les clients, prospects, opportunités et le pipeline de ventes.
+
+servers:
+  - url: http://localhost:8003/api/v1
+    description: Serveur de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Clients
+    description: Gestion des clients
+  - name: Prospects
+    description: Gestion des prospects
+  - name: Opportunites
+    description: Pipeline de ventes
+
+paths:
+
+  /crm/clients/:
+    get:
+      tags: [Clients]
+      summary: Lister les clients
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: actif
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Liste des clients
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClients'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Clients]
+      summary: Créer un client
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientCreate'
+      responses:
+        '201':
+          description: Client créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /crm/clients/{id}/:
+    get:
+      tags: [Clients]
+      summary: Détail d'un client
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Client trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Clients]
+      summary: Modifier un client
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpdate'
+      responses:
+        '200':
+          description: Client modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Clients]
+      summary: Supprimer un client
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Client supprimé
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /crm/prospects/:
+    get:
+      tags: [Prospects]
+      summary: Lister les prospects
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Liste des prospects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProspects'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Prospects]
+      summary: Créer un prospect
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProspectCreate'
+      responses:
+        '201':
+          description: Prospect créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prospect'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /crm/opportunites/:
+    get:
+      tags: [Opportunites]
+      summary: Lister les opportunités
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [NOUVEAU, EN_COURS, GAGNE, PERDU]
+      responses:
+        '200':
+          description: Liste des opportunités
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOpportunites'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Opportunites]
+      summary: Créer une opportunité
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportuniteCreate'
+      responses:
+        '201':
+          description: Opportunité créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunite'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /crm/opportunites/{id}/:
+    get:
+      tags: [Opportunites]
+      summary: Détail d'une opportunité
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Opportunité trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunite'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Opportunites]
+      summary: Modifier une opportunité
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportuniteUpdate'
+      responses:
+        '200':
+          description: Opportunité modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunite'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 20
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+
+  schemas:
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        email:
+          type: string
+          format: email
+        telephone:
+          type: string
+        adresse:
+          type: string
+        secteur:
+          type: string
+        chiffre_affaires:
+          type: number
+        is_actif:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    ClientCreate:
+      type: object
+      required: [nom, email]
+      properties:
+        nom:
+          type: string
+        email:
+          type: string
+          format: email
+        telephone:
+          type: string
+        adresse:
+          type: string
+        secteur:
+          type: string
+
+    ClientUpdate:
+      type: object
+      properties:
+        nom:
+          type: string
+        email:
+          type: string
+        telephone:
+          type: string
+        adresse:
+          type: string
+        is_actif:
+          type: boolean
+
+    PaginatedClients:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Client'
+
+    Prospect:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        email:
+          type: string
+        telephone:
+          type: string
+        source:
+          type: string
+          enum: [SITE_WEB, RECOMMANDATION, EVENEMENT, AUTRE]
+        statut:
+          type: string
+          enum: [NOUVEAU, CONTACTE, QUALIFIE, CONVERTI, PERDU]
+        created_at:
+          type: string
+          format: date-time
+
+    ProspectCreate:
+      type: object
+      required: [nom, email]
+      properties:
+        nom:
+          type: string
+        email:
+          type: string
+          format: email
+        telephone:
+          type: string
+        source:
+          type: string
+          enum: [SITE_WEB, RECOMMANDATION, EVENEMENT, AUTRE]
+
+    PaginatedProspects:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prospect'
+
+    Opportunite:
+      type: object
+      properties:
+        id:
+          type: integer
+        titre:
+          type: string
+        client:
+          $ref: '#/components/schemas/Client'
+        montant:
+          type: number
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+        probabilite:
+          type: integer
+          minimum: 0
+          maximum: 100
+        statut:
+          type: string
+          enum: [NOUVEAU, EN_COURS, GAGNE, PERDU]
+        date_cloture_prevue:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+
+    OpportuniteCreate:
+      type: object
+      required: [titre, client_id, montant, devise, date_cloture_prevue]
+      properties:
+        titre:
+          type: string
+        client_id:
+          type: integer
+        montant:
+          type: number
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+        probabilite:
+          type: integer
+          default: 50
+        date_cloture_prevue:
+          type: string
+          format: date
+
+    OpportuniteUpdate:
+      type: object
+      properties:
+        titre:
+          type: string
+        montant:
+          type: number
+        probabilite:
+          type: integer
+        statut:
+          type: string
+          enum: [NOUVEAU, EN_COURS, GAGNE, PERDU]
+        date_cloture_prevue:
+          type: string
+          format: date
+
+    PaginatedOpportunites:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Opportunite'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token JWT absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

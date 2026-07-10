@@ -1,0 +1,36 @@
+# ──────────────────────────────────────────────────────────
+# pyproject.toml — Service RH — Formuloo OS
+# Configuration de Ruff et Black
+# ──────────────────────────────────────────────────────────
+
+[tool.black]
+line-length    = 88
+target-version = ['py311']
+exclude        = '''
+/(
+    venv
+  | migrations
+  | __pycache__
+)/
+'''
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = [
+    "venv",
+    "migrations",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+ignore = [
+    "E501",  # line too long (géré par Black)
+    "F401",  # imported but unused (dans __init__.py)
+]

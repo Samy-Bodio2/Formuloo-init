@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST http://localhost/api/v1/auth/register/ -H 'Host: 10.0.2.2' -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(curl -s -X POST http://localhost/api/v1/auth/verify-email/ -H \"Host: 10.0.2.2\" -H \"Content-Type: application/json\" -d '{\"token\":\"f07b618a-056d-4ff4-8f34-6840b59836d4\"}' -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://localhost/api/v1/auth/login/ -H \"Host: 10.0.2.2\" -H \"Content-Type: application/json\" -d '{\"email\":\"marie.kamga@pmedemo.com\",\"password\":\"MotDePasse2024\"}' -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost/health -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost/api/schema/auth/ -H \"Host: localhost\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s http://localhost/api/schema/auth/ -w \"\\\\nHTTP:%{http_code}\\\\nCT:%{content_type}\\\\n\")"
+    ]
+  }
+}

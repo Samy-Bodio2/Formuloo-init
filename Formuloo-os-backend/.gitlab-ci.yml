@@ -1,0 +1,282 @@
+# ============================================================
+# Pipeline GitLab CI/CD — Formuloo OS (monorepo)
+# Services : Auth (port 8000) + HR (port 8001) + Gateway nginx
+# ============================================================
+#
+# Étapes :
+#   1. lint        → style PEP8 (ruff + black)
+#   2. test        → pytest unitaires (SQLite in-memory, pas de service externe)
+#   3. integration → tests end-to-end via passerelle (PostgreSQL + stack Docker)
+#   4. build       → images Docker → GitLab Container Registry
+#
+# ============================================================
+
+stages:
+  - lint
+  - test
+  - integration
+  - build
+
+# ── VARIABLES GLOBALES ────────────────────────────────────────────────────────
+variables:
+  PYTHON_IMAGE: "python:3.11.9-slim"
+  AUTH_IMAGE: "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHORT_SHA"
+  HR_IMAGE: "$CI_REGISTRY_IMAGE/hr:$CI_COMMIT_SHORT_SHA"
+  AUTH_IMAGE_LATEST: "$CI_REGISTRY_IMAGE/auth:latest"
+  HR_IMAGE_LATEST: "$CI_REGISTRY_IMAGE/hr:latest"
+
+# ── ANCHORS RÉUTILISABLES ──────────────────────────────────────────────────────
+
+# Installation de base Python pour lint et test
+.python_base: &python_base
+  image: "$PYTHON_IMAGE"
+  before_script:
+    - pip install --no-cache-dir --upgrade pip
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODULE AUTH
+# ─────────────────────────────────────────────────────────────────────────────
+
+auth:lint:
+  stage: lint
+  <<: *python_base
+  before_script:
+    - pip install --no-cache-dir --upgrade pip
+    - pip install --no-cache-dir ruff==0.4.4 black==24.4.2
+  script:
+    - cd services/auth
+    - echo "=== Auth — vérification ruff ==="
+    - ruff check .
+    - echo "=== Auth — vérification black ==="
+    - black --check --workers 1 .
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  allow_failure: false
+
+auth:test:
+  stage: test
+  <<: *python_base
+  before_script:
+    - pip install --no-cache-dir --upgrade pip
+    - pip install --no-cache-dir -r services/auth/requirements.txt
+  variables:
+    # settings_test.py utilise SQLite in-memory → pas de Postgres/Redis nécessaires
+    SECRET_KEY: "django-insecure-ci-auth-secret-key-formuloo"
+    DEBUG: "True"
+    ALLOWED_HOSTS: "localhost,127.0.0.1"
+    FRONTEND_URL: "http://localhost:3000"
+    ACCESS_TOKEN_LIFETIME: "15"
+    REFRESH_TOKEN_LIFETIME: "7"
+  script:
+    - cd services/auth
+    - echo "=== Auth — lancement des tests ==="
+    - pytest
+    - echo "=== Auth — couverture minimale 70% ==="
+    - coverage report --fail-under=70
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: services/auth/coverage.xml
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  allow_failure: false
+
+auth:build:
+  stage: build
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - sleep 5
+    - docker info
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - echo "=== Auth — construction image Docker ==="
+    - docker build -t "$AUTH_IMAGE" services/auth/
+    - docker push "$AUTH_IMAGE"
+    # Tag latest uniquement sur la branche main
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        docker tag "$AUTH_IMAGE" "$AUTH_IMAGE_LATEST"
+        docker push "$AUTH_IMAGE_LATEST"
+        echo "Image latest mise à jour"
+      fi
+    - echo "Image auth poussée → $AUTH_IMAGE"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "letissia-chowuinou"'
+  allow_failure: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODULE HR
+# ─────────────────────────────────────────────────────────────────────────────
+
+hr:lint:
+  stage: lint
+  <<: *python_base
+  before_script:
+    - pip install --no-cache-dir --upgrade pip
+    - pip install --no-cache-dir ruff==0.4.4 black==24.4.2
+  script:
+    - cd services/hr
+    - echo "=== HR — vérification ruff ==="
+    - ruff check .
+    - echo "=== HR — vérification black ==="
+    - black --check --workers 1 .
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  allow_failure: false
+
+hr:test:
+  stage: test
+  <<: *python_base
+  before_script:
+    - pip install --no-cache-dir --upgrade pip
+    - pip install --no-cache-dir -r services/hr/requirements.txt
+  variables:
+    # settings_test.py utilise SQLite in-memory + DummyCache → pas de Redis nécessaire
+    SECRET_KEY: "django-insecure-ci-hr-secret-key-formuloo"
+    AUTH_SECRET_KEY: "django-insecure-ci-hr-secret-key-formuloo"
+    DEBUG: "True"
+    ALLOWED_HOSTS: "localhost,127.0.0.1"
+  script:
+    - cd services/hr
+    - echo "=== HR — lancement des tests ==="
+    - pytest
+    - echo "=== HR — couverture minimale 50% ==="
+    - coverage report --fail-under=50
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: services/hr/coverage.xml
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  allow_failure: false
+
+hr:build:
+  stage: build
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - sleep 5
+    - docker info
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - echo "=== HR — construction image Docker ==="
+    - docker build -t "$HR_IMAGE" services/hr/
+    - docker push "$HR_IMAGE"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        docker tag "$HR_IMAGE" "$HR_IMAGE_LATEST"
+        docker push "$HR_IMAGE_LATEST"
+        echo "Image latest mise à jour"
+      fi
+    - echo "Image HR poussée → $HR_IMAGE"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "letissia-chowuinou"'
+  allow_failure: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TESTS D'INTÉGRATION — Stack complète avec PostgreSQL réel
+# ─────────────────────────────────────────────────────────────────────────────
+
+integration:gateway:
+  stage: integration
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    AUTH_SECRET_KEY: "django-insecure-ci-integration-secret-formuloo"
+    HR_SECRET_KEY: "django-insecure-ci-integration-secret-formuloo"
+    DB_USER: formuloo
+    DB_PASSWORD: formuloo_ci
+    AUTH_DB_NAME: formuloo_auth
+    HR_DB_NAME: formuloo_hr
+    DEBUG: "0"
+    ALLOWED_HOSTS: "*"
+    ACCESS_TOKEN_LIFETIME: "15"
+    REFRESH_TOKEN_LIFETIME: "7"
+    FRONTEND_URL: "http://localhost:3000"
+    TEST_RH_EMAIL: "rh@pme-integration.cm"
+    TEST_RH_PASSWORD: "Integration@2024"
+  before_script:
+    - sleep 5
+    - docker info
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    # curl seul — pas de pip Alpine (cassé sur 3.20 à cause de libexpat)
+    - apk add --no-cache curl
+  script:
+    - echo "=== Lancement de la stack complète ==="
+    - docker compose -f docker-compose.yml up -d --build
+    - echo "=== Attente des services (polling 150s max) ==="
+    - |
+      for i in $(seq 1 30); do
+        docker exec formuloo_gateway wget -qO /dev/null http://localhost/health 2>/dev/null \
+          && echo "Passerelle prête !" && break
+        echo "  attente... ($i/30)"
+        sleep 5
+      done
+    - docker exec formuloo_gateway wget -qO- http://localhost/health || (docker compose logs --tail=50 && exit 1)
+    - echo "=== Attente du service Auth (migrations) ==="
+    - |
+      for i in $(seq 1 24); do
+        docker exec formuloo_auth python manage.py check --database default 2>/dev/null \
+          && echo "Auth prêt !" && break
+        echo "  Auth pas encore prêt... ($i/24)"
+        sleep 5
+      done
+    - docker exec formuloo_auth python manage.py check --database default || (docker logs formuloo_auth --tail=30 && exit 1)
+    - echo "=== Création du compte RH de test ==="
+    - |
+      docker exec formuloo_auth python manage.py shell -c "
+      from authentification.models import User, Organisation, Role
+      org, _ = Organisation.objects.get_or_create(slug='pme-ci', defaults={'name':'PME CI','currency':'XAF'})
+      role, _ = Role.objects.get_or_create(code='RH_MANAGER', defaults={'name':'RH Manager','is_system':True})
+      u, created = User.objects.get_or_create(email='rh@pme-integration.cm', defaults={'tenant':org,'first_name':'RH','last_name':'CI'})
+      if created:
+          u.set_password('Integration@2024')
+      u.is_verified = True
+      u.save()
+      u.roles.add(role)
+      print('Compte RH OK:', u.email)
+      "
+    - echo "=== Tests d'intégration via docker run python:3.11-slim ==="
+    - |
+      docker run --rm \
+        --network formuloo_network \
+        -e GATEWAY_URL=http://gateway \
+        -e TEST_RH_EMAIL="${TEST_RH_EMAIL}" \
+        -e TEST_RH_PASSWORD="${TEST_RH_PASSWORD}" \
+        -v "${CI_PROJECT_DIR}/tests:/tests" \
+        python:3.11-slim \
+        bash -c "pip install requests pytest -q && pytest /tests/integration/ -m integration -v"
+  after_script:
+    - docker compose down -v
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "letissia-chowuinou"'
+  allow_failure: false

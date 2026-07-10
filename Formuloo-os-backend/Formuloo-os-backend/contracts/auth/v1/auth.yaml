@@ -1,0 +1,2153 @@
+openapi: 3.0.3
+info:
+  title: Formuloo OS — Auth Service API
+  version: 1.0.0
+  description: Service d'authentification SSO pour Formuloo OS ERP
+paths:
+  /api/v1/auth/api-keys/:
+    get:
+      operationId: v1_auth_api_keys_retrieve
+      description: Retourne la liste des clés API du tenant courant. La clé brute
+        n'est jamais retournée.
+      summary: Lister les clés API
+      tags:
+      - API Keys
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Liste des clés API
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+    post:
+      operationId: v1_auth_api_keys_create
+      description: Génère une nouvelle clé API. La clé brute est retournée UNE SEULE
+        FOIS.
+      summary: Créer une clé API
+      tags:
+      - API Keys
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                description: Clé API créée
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/api-keys/{id}/:
+    get:
+      operationId: v1_auth_api_keys_retrieve_2
+      description: |-
+        GET    /api/v1/auth/api-keys/{id}/ — Détail
+        DELETE /api/v1/auth/api-keys/{id}/ — Révoquer
+      summary: Détail d'une clé API
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - API Keys
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Clé API trouvée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Clé API introuvable
+          description: ''
+    delete:
+      operationId: v1_auth_api_keys_destroy
+      description: Désactive une clé API — elle ne pourra plus être utilisée.
+      summary: Révoquer une clé API
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - API Keys
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Clé API révoquée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Clé API introuvable
+          description: ''
+  /api/v1/auth/audit-logs/:
+    get:
+      operationId: v1_auth_audit_logs_retrieve
+      description: Retourne l'historique immuable et paginé des actions du tenant.
+        Lecture seule.
+      summary: Lister les journaux d'audit
+      tags:
+      - Audit
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Liste paginée des journaux d'audit
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Permissions insuffisantes
+          description: ''
+  /api/v1/auth/audit-logs/{id}/:
+    get:
+      operationId: v1_auth_audit_logs_retrieve_2
+      description: Retourne les informations d'une entrée du journal d'audit. Lecture
+        seule.
+      summary: Détail d'un journal d'audit
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Audit
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Journal d'audit trouvé
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Journal introuvable
+          description: ''
+  /api/v1/auth/forgot-password/:
+    post:
+      operationId: v1_auth_forgot_password_create
+      description: Envoie un lien de réinitialisation par email si le compte existe.
+        Répond toujours 200 pour ne pas révéler si l'email est connu.
+      summary: Mot de passe oublié
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Email envoyé si le compte existe
+          description: ''
+  /api/v1/auth/invite/:
+    post:
+      operationId: v1_auth_invite_create
+      description: Crée un compte employé inactif et envoie un lien d'invitation par
+        email. L'employé définit son mot de passe en cliquant sur le lien (72h). Réservé
+        au RH Manager.
+      summary: Inviter un employé
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                description: Invitation envoyée
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Email déjà utilisé ou rôles invalides
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Réservé au RH Manager
+          description: ''
+  /api/v1/auth/invite/accept/:
+    post:
+      operationId: v1_auth_invite_accept_create
+      description: Activates the invited employee account by setting a password. Le
+        token d'invitation est valable 72h et à usage unique.
+      summary: Accepter une invitation
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Compte activé — connexion possible
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Token invalide/expiré ou mots de passe non conformes
+          description: ''
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: Authentification par email et mot de passe. Retourne un access
+        token et un refresh token.
+      summary: Connexion utilisateur
+      tags:
+      - Authentification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Connexion réussie — tokens JWT retournés
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Credentials invalides
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: Blackliste le refresh token. L'access token expire naturellement.
+      summary: Déconnexion utilisateur
+      tags:
+      - Authentification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Déconnexion réussie
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Token invalide
+          description: ''
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: Retourne le profil de l'utilisateur connecté.
+      summary: Profil utilisateur courant
+      tags:
+      - Authentification
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+    patch:
+      operationId: v1_auth_me_partial_update
+      description: Modifie le profil de l'utilisateur connecté.
+      summary: Modifier le profil
+      tags:
+      - Authentification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/me/changer-mot-de-passe/:
+    post:
+      operationId: v1_auth_me_changer_mot_de_passe_create
+      description: Change le mot de passe de l'utilisateur connecté.
+      summary: Changer le mot de passe
+      tags:
+      - Authentification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangerMotDePasseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangerMotDePasseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangerMotDePasseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Mot de passe modifié
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Ancien mot de passe incorrect
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/organisations/:
+    get:
+      operationId: v1_auth_organisations_list
+      description: Retourne la liste de toutes les organisations. Réservé au SUPER_ADMIN.
+      summary: Lister les organisations
+      tags:
+      - Organisations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organisation'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Permissions insuffisantes
+          description: ''
+    post:
+      operationId: v1_auth_organisations_create
+      description: Crée une nouvelle organisation (PME cliente). Réservé au SUPER_ADMIN.
+      summary: Créer une organisation
+      tags:
+      - Organisations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organisation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Permissions insuffisantes
+          description: ''
+  /api/v1/auth/organisations/{id}/:
+    get:
+      operationId: v1_auth_organisations_retrieve
+      description: |-
+        GET    /api/v1/auth/organisations/{id}/ — Détail
+        PUT    /api/v1/auth/organisations/{id}/ — Modifier
+        DELETE /api/v1/auth/organisations/{id}/ — Supprimer
+        Réservé au SUPER_ADMIN.
+      summary: Détail d'une organisation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Organisations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organisation'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Organisation introuvable
+          description: ''
+    put:
+      operationId: v1_auth_organisations_update
+      description: |-
+        GET    /api/v1/auth/organisations/{id}/ — Détail
+        PUT    /api/v1/auth/organisations/{id}/ — Modifier
+        DELETE /api/v1/auth/organisations/{id}/ — Supprimer
+        Réservé au SUPER_ADMIN.
+      summary: Modifier une organisation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Organisations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrganisationCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organisation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Organisation introuvable
+          description: ''
+    delete:
+      operationId: v1_auth_organisations_destroy
+      description: |-
+        GET    /api/v1/auth/organisations/{id}/ — Détail
+        PUT    /api/v1/auth/organisations/{id}/ — Modifier
+        DELETE /api/v1/auth/organisations/{id}/ — Supprimer
+        Réservé au SUPER_ADMIN.
+      summary: Supprimer une organisation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Organisations
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Organisation supprimée
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Organisation introuvable
+          description: ''
+  /api/v1/auth/permissions/:
+    get:
+      operationId: v1_auth_permissions_list
+      description: Retourne toutes les permissions disponibles. Lecture seule.
+      summary: Lister les permissions
+      tags:
+      - Permissions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Permission'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/permissions/{id}/:
+    get:
+      operationId: v1_auth_permissions_retrieve
+      description: |-
+        GET /api/v1/auth/permissions/{id}/
+        Détail d'une permission.
+        Lecture seule — immuable.
+      summary: Détail d'une permission
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Permissions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Permission introuvable
+          description: ''
+  /api/v1/auth/refresh-tokens/:
+    get:
+      operationId: v1_auth_refresh_tokens_retrieve
+      description: Retourne la liste des sessions actives (refresh tokens non blacklistés)
+        de l'utilisateur connecté.
+      summary: Lister les sessions actives
+      tags:
+      - Auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Liste des sessions actives
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/refresh-tokens/{id}/:
+    delete:
+      operationId: v1_auth_refresh_tokens_destroy
+      description: Blackliste un refresh token — révoque une session active.
+      summary: Révoquer une session
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Auth
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Session révoquée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Session introuvable
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: v1_auth_register_create
+      description: Crée une nouvelle organisation (tenant) et son administrateur RH
+        Manager. Un email de vérification est envoyé à l'adresse fournie. Le compte
+        est actif mais non vérifié jusqu'au clic sur le lien.
+      summary: Inscription — créer une PME
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                description: Compte créé — email de vérification envoyé
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides (slug déjà pris, email existant, etc.)
+          description: ''
+  /api/v1/auth/resend-verification/:
+    post:
+      operationId: v1_auth_resend_verification_create
+      description: Génère et envoie un nouveau lien de vérification. Répond toujours
+        200 même si l'email est inconnu (anti-énumération).
+      summary: Renvoyer le lien de vérification email
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Email envoyé (si le compte existe et n'est pas vérifié)
+          description: ''
+  /api/v1/auth/reset-password/:
+    post:
+      operationId: v1_auth_reset_password_create
+      description: Définit un nouveau mot de passe via le token reçu par email. Le
+        token RESET_PASSWORD expire après 2h et est à usage unique.
+      summary: Réinitialiser le mot de passe
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Mot de passe réinitialisé
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Token invalide/expiré ou mot de passe non conforme
+          description: ''
+  /api/v1/auth/roles/:
+    get:
+      operationId: v1_auth_roles_list
+      description: Retourne la liste des rôles du tenant courant.
+      summary: Lister les rôles
+      tags:
+      - Rôles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+    post:
+      operationId: v1_auth_roles_create
+      description: Crée un nouveau rôle dans le tenant courant.
+      summary: Créer un rôle
+      tags:
+      - Rôles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/roles/{id}/:
+    get:
+      operationId: v1_auth_roles_retrieve
+      description: |-
+        GET    /api/v1/auth/roles/{id}/ — Détail
+        PUT    /api/v1/auth/roles/{id}/ — Modifier
+        DELETE /api/v1/auth/roles/{id}/ — Supprimer
+      summary: Détail d'un rôle
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Rôles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rôle introuvable
+          description: ''
+    put:
+      operationId: v1_auth_roles_update
+      description: |-
+        GET    /api/v1/auth/roles/{id}/ — Détail
+        PUT    /api/v1/auth/roles/{id}/ — Modifier
+        DELETE /api/v1/auth/roles/{id}/ — Supprimer
+      summary: Modifier un rôle
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Rôles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Rôle système non modifiable
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rôle introuvable
+          description: ''
+    delete:
+      operationId: v1_auth_roles_destroy
+      description: |-
+        GET    /api/v1/auth/roles/{id}/ — Détail
+        PUT    /api/v1/auth/roles/{id}/ — Modifier
+        DELETE /api/v1/auth/roles/{id}/ — Supprimer
+      summary: Supprimer un rôle
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Rôles
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Rôle supprimé
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Impossible de supprimer un rôle système
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Rôle introuvable
+          description: ''
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: v1_auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/utilisateurs/:
+    get:
+      operationId: v1_auth_utilisateurs_list
+      description: Retourne la liste paginée des utilisateurs du tenant courant.
+      summary: Lister les utilisateurs
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+    post:
+      operationId: v1_auth_utilisateurs_create
+      description: Crée un nouvel utilisateur dans le tenant courant.
+      summary: Créer un utilisateur
+      tags:
+      - Utilisateurs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/auth/utilisateurs/{id}/:
+    get:
+      operationId: v1_auth_utilisateurs_retrieve
+      description: |-
+        GET    /api/v1/auth/utilisateurs/{id}/ — Détail
+        PUT    /api/v1/auth/utilisateurs/{id}/ — Modifier
+        DELETE /api/v1/auth/utilisateurs/{id}/ — Supprimer (soft delete)
+      summary: Détail d'un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur introuvable
+          description: ''
+    put:
+      operationId: v1_auth_utilisateurs_update
+      description: |-
+        GET    /api/v1/auth/utilisateurs/{id}/ — Détail
+        PUT    /api/v1/auth/utilisateurs/{id}/ — Modifier
+        DELETE /api/v1/auth/utilisateurs/{id}/ — Supprimer (soft delete)
+      summary: Modifier un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur introuvable
+          description: ''
+    delete:
+      operationId: v1_auth_utilisateurs_destroy
+      description: |-
+        GET    /api/v1/auth/utilisateurs/{id}/ — Détail
+        PUT    /api/v1/auth/utilisateurs/{id}/ — Modifier
+        DELETE /api/v1/auth/utilisateurs/{id}/ — Supprimer (soft delete)
+      summary: Supprimer un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur désactivé
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur introuvable
+          description: ''
+  /api/v1/auth/utilisateurs/{id}/activer/:
+    post:
+      operationId: v1_auth_utilisateurs_activer_create
+      description: |-
+        POST /api/v1/auth/utilisateurs/{id}/activer/
+        Activer un compte utilisateur.
+      summary: Activer un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur activé
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur introuvable
+          description: ''
+  /api/v1/auth/utilisateurs/{id}/desactiver/:
+    post:
+      operationId: v1_auth_utilisateurs_desactiver_create
+      description: |-
+        POST /api/v1/auth/utilisateurs/{id}/desactiver/
+        Désactiver un compte utilisateur.
+      summary: Désactiver un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur désactivé
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur introuvable
+          description: ''
+  /api/v1/auth/utilisateurs/{id}/roles/:
+    get:
+      operationId: v1_auth_utilisateurs_roles_retrieve
+      description: |-
+        GET    /api/v1/auth/utilisateurs/{id}/roles/
+        POST   /api/v1/auth/utilisateurs/{id}/roles/
+        Gestion des rôles d'un utilisateur.
+      summary: Lister les rôles d'un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Liste des rôles
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur introuvable
+          description: ''
+    post:
+      operationId: v1_auth_utilisateurs_roles_create
+      description: |-
+        GET    /api/v1/auth/utilisateurs/{id}/roles/
+        POST   /api/v1/auth/utilisateurs/{id}/roles/
+        Gestion des rôles d'un utilisateur.
+      summary: Assigner un rôle à un utilisateur
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Utilisateurs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Rôle assigné
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Utilisateur ou rôle introuvable
+          description: ''
+  /api/v1/auth/verify-email/:
+    post:
+      operationId: v1_auth_verify_email_create
+      description: Active le compte utilisateur via le token reçu par email. Le token
+        est valide 48h et ne peut être utilisé qu'une seule fois.
+      summary: Vérifier l'adresse email
+      tags:
+      - Inscription & Compte
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Email vérifié — compte activé
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Token invalide ou expiré
+          description: ''
+components:
+  schemas:
+    AcceptInvitationRequest:
+      type: object
+      description: |-
+        Activation du compte employé via le token d'invitation.
+        L'employé choisit son mot de passe lors de cette étape.
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: Token UUID reçu dans le lien d'invitation email
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        confirm_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - confirm_password
+      - password
+      - token
+    ActionEnum:
+      enum:
+      - read
+      - write
+      - delete
+      type: string
+      description: |-
+        * `read` - Lire
+        * `write` - Écrire
+        * `delete` - Supprimer
+    ChangerMotDePasseRequest:
+      type: object
+      description: |-
+        Serializer pour le changement de mot de passe.
+        POST /api/v1/auth/me/changer-mot-de-passe/
+      properties:
+        ancien_mot_de_passe:
+          type: string
+          writeOnly: true
+          minLength: 1
+        nouveau_mot_de_passe:
+          type: string
+          writeOnly: true
+          minLength: 8
+      required:
+      - ancien_mot_de_passe
+      - nouveau_mot_de_passe
+    ForgotPasswordRequest:
+      type: object
+      description: |-
+        Demande de réinitialisation du mot de passe.
+        Envoie un lien de reset par email si le compte existe.
+        Ne révèle jamais si l'email est connu (protection anti-énumération).
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    InviteRequest:
+      type: object
+      description: |-
+        Invitation d'un employé par le RH Manager.
+
+        Crée un compte User inactif (sans mot de passe)
+        et envoie un lien d'activation par email.
+        L'employé définit son mot de passe en acceptant l'invitation.
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          minLength: 1
+        roles:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+          description: 'Liste des codes de rôle à assigner (ex: ["EMPLOYE", "MANAGER"])'
+          minItems: 1
+      required:
+      - email
+      - first_name
+      - last_name
+      - roles
+    LocaleEnum:
+      enum:
+      - fr
+      - en
+      - pt
+      type: string
+      description: |-
+        * `fr` - Français
+        * `en` - English
+        * `pt` - Português
+    LoginRequest:
+      type: object
+      description: |-
+        Serializer pour le login email/password.
+        Valide les credentials et retourne l'utilisateur.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    LogoutRequest:
+      type: object
+      description: |-
+        Serializer pour le logout.
+        Blackliste le refresh token.
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    Me:
+      type: object
+      description: |-
+        Serializer pour le profil utilisateur courant.
+        GET /api/v1/auth/me/
+        PATCH /api/v1/auth/me/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        tenant_id:
+          type: string
+          readOnly: true
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        is_active:
+          type: boolean
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+        roles:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - first_name
+      - id
+      - is_active
+      - is_verified
+      - last_name
+      - roles
+      - tenant_id
+      - updated_at
+    ModuleEnum:
+      enum:
+      - auth
+      - hr
+      - compta
+      - crm
+      - stock
+      - analytics
+      type: string
+      description: |-
+        * `auth` - Authentification
+        * `hr` - Ressources Humaines
+        * `compta` - Comptabilité
+        * `crm` - CRM
+        * `stock` - Stock
+        * `analytics` - Analytics
+    Organisation:
+      type: object
+      description: |-
+        Serializer complet pour les organisations.
+        Utilisé pour la liste et le détail.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 255
+        currency:
+          type: string
+          maxLength: 10
+        locale:
+          $ref: '#/components/schemas/LocaleEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - slug
+      - updated_at
+    OrganisationCreateRequest:
+      type: object
+      description: |-
+        Serializer pour la création d'une organisation.
+        POST /api/v1/auth/organisations/
+      properties:
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 10
+        locale:
+          $ref: '#/components/schemas/LocaleEnum'
+      required:
+      - name
+      - slug
+    PatchedMeRequest:
+      type: object
+      description: |-
+        Serializer pour le profil utilisateur courant.
+        GET /api/v1/auth/me/
+        PATCH /api/v1/auth/me/
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+    Permission:
+      type: object
+      description: |-
+        Serializer pour les permissions.
+        GET /api/v1/auth/permissions/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        module:
+          $ref: '#/components/schemas/ModuleEnum'
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        resource:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          readOnly: true
+      required:
+      - action
+      - code
+      - id
+      - module
+      - resource
+    RegisterRequest:
+      type: object
+      description: |-
+        Inscription publique : crée une nouvelle PME (Organisation)
+        et son premier utilisateur avec le rôle RH_MANAGER.
+
+        C'est le seul endpoint Auth qui ne nécessite pas de JWT.
+        Un email de vérification est envoyé après la création.
+      properties:
+        company_name:
+          type: string
+          minLength: 1
+          description: 'Nom de la PME (ex: PME Cameroun SARL)'
+          maxLength: 255
+        company_slug:
+          type: string
+          minLength: 1
+          description: 'Identifiant URL unique de la PME (ex: pme-cameroun)'
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        confirm_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - company_name
+      - company_slug
+      - confirm_password
+      - email
+      - first_name
+      - last_name
+      - password
+    ResendVerificationRequest:
+      type: object
+      description: |-
+        Renvoie un email de vérification à l'adresse fournie.
+        Ne révèle pas si l'email existe (protection contre l'énumération).
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    ResetPasswordRequest:
+      type: object
+      description: Réinitialisation effective du mot de passe via le token de reset.
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: Token UUID reçu dans le lien de réinitialisation email
+        nouveau_mot_de_passe:
+          type: string
+          writeOnly: true
+          minLength: 8
+        confirm_mot_de_passe:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - confirm_mot_de_passe
+      - nouveau_mot_de_passe
+      - token
+    RoleCreateRequest:
+      type: object
+      description: |-
+        Serializer pour la création d'un rôle.
+        POST /api/v1/auth/roles/
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          maxLength: 100
+        permissions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+      required:
+      - code
+      - name
+    RoleDetail:
+      type: object
+      description: |-
+        Serializer pour le détail d'un rôle.
+        GET /api/v1/auth/roles/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 100
+        is_system:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - permissions
+      - updated_at
+    RoleList:
+      type: object
+      description: |-
+        Serializer pour la liste des rôles.
+        GET /api/v1/auth/roles/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 100
+        is_system:
+          type: boolean
+        permissions:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - permissions
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    UserCreateRequest:
+      type: object
+      description: |-
+        Serializer pour la création d'un utilisateur.
+        POST /api/v1/auth/utilisateurs/
+
+        - Si l'utilisateur connecté est ADMIN_PME :
+          tenant extrait automatiquement du JWT
+        - Si l'utilisateur connecté est SUPER_ADMIN :
+          tenant_id doit être fourni dans le body
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 255
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        role:
+          type: string
+          writeOnly: true
+          minLength: 1
+        tenant_id:
+          type: string
+          format: uuid
+          writeOnly: true
+      required:
+      - email
+      - first_name
+      - last_name
+      - password
+    UserDetail:
+      type: object
+      description: |-
+        Serializer pour le détail d'un utilisateur.
+        GET /api/v1/auth/utilisateurs/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        is_active:
+          type: boolean
+        is_verified:
+          type: boolean
+        roles:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - first_name
+      - id
+      - last_name
+      - roles
+      - updated_at
+    UserList:
+      type: object
+      description: |-
+        Serializer pour la liste des utilisateurs.
+        GET /api/v1/auth/utilisateurs/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        is_active:
+          type: boolean
+        is_verified:
+          type: boolean
+        roles:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - first_name
+      - id
+      - last_name
+      - roles
+    UserUpdateRequest:
+      type: object
+      description: |-
+        Serializer pour la modification d'un utilisateur.
+        PUT /api/v1/auth/utilisateurs/{id}/
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        is_active:
+          type: boolean
+      required:
+      - first_name
+      - last_name
+    VerifyEmailRequest:
+      type: object
+      description: |-
+        Vérifie l'adresse email d'un utilisateur via le token
+        reçu par email après l'inscription ou après renvoi.
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: Token UUID reçu dans le lien de vérification email
+      required:
+      - token
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

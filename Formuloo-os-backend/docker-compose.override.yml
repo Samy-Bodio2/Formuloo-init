@@ -1,0 +1,26 @@
+# ============================================================
+# docker-compose.override.yml — Surcouche DEV uniquement
+# Chargée automatiquement par `docker compose up` (pas besoin de -f).
+# Objectif : hot-reload du code Python sans rebuild d'image.
+#   - Monte le code source en volume (les modifs sur l'hôte sont
+#     visibles immédiatement dans le conteneur)
+#   - Remplace gunicorn par `runserver` (autoreload Django)
+# Ne PAS utiliser ce fichier en production : gunicorn doit rester
+# le serveur de référence (workers multiples, pas d'autoreload).
+# ============================================================
+
+services:
+  auth:
+    volumes:
+      - ./services/auth:/app
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+
+  hr:
+    volumes:
+      - ./services/hr:/app
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8001"
+
+  compta:
+    volumes:
+      - ./services/compta:/app
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8002"

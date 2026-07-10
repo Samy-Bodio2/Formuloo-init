@@ -1,0 +1,53 @@
+CREATE TABLE EmployeeEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    employee_number TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    photo_url TEXT,
+    department_name TEXT,
+    position_title TEXT,
+    hire_date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    employee_type TEXT NOT NULL,
+    gender TEXT NOT NULL,
+    nationality TEXT,
+    address TEXT,
+    numero_cnps TEXT,
+    situation_familiale TEXT,
+    nombre_enfants INTEGER NOT NULL DEFAULT 0,
+    manager_name TEXT,
+    updated_at TEXT NOT NULL
+);
+
+getAll:
+SELECT * FROM EmployeeEntity ORDER BY last_name ASC;
+
+getById:
+SELECT * FROM EmployeeEntity WHERE id = :id;
+
+search:
+SELECT * FROM EmployeeEntity
+WHERE first_name LIKE :query OR last_name LIKE :query OR email LIKE :query OR employee_number LIKE :query
+ORDER BY last_name ASC;
+
+filterByStatus:
+SELECT * FROM EmployeeEntity WHERE status = :status ORDER BY last_name ASC;
+
+upsert:
+INSERT OR REPLACE INTO EmployeeEntity(
+    id, employee_number, first_name, last_name, email, phone, photo_url,
+    department_name, position_title, hire_date, status, employee_type, gender,
+    nationality, address, numero_cnps, situation_familiale, nombre_enfants,
+    manager_name, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteAll:
+DELETE FROM EmployeeEntity;
+
+deleteById:
+DELETE FROM EmployeeEntity WHERE id = :id;
+
+countByStatus:
+SELECT status, COUNT(*) AS count FROM EmployeeEntity GROUP BY status;

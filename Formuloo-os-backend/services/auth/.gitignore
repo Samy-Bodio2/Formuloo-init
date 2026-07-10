@@ -1,0 +1,28 @@
+# Environnement virtuel
+venv/
+.venv/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Variables d'environnement
+.env
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# pytest
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Base de données locale
+*.sqlite3

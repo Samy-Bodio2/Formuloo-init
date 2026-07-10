@@ -1,0 +1,1033 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — GESDOC SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : GESDOC Service (Gestion Documentaire OCR + Blockchain)
+# Version     : 1.0.0
+# Auteur      : CHOWUINOU TEGUIA
+# Contexte    : Module de la thèse — Conception et Implémentation d'un
+#               Module Intelligent de Gestion Documentaire Basé sur
+#               l'OCR et la Blockchain dans une Architecture
+#               Microservices : Cas de l'ERP Formuloo OS.
+# Description : Cycle complet d'une pièce comptable : upload → OCR
+#               (Tesseract5 + EasyOCR fallback + extraction de champs
+#               structurés par regex) → validation humaine →
+#               certification blockchain (hash SHA-256 ancré sur
+#               Ethereum) → création automatique de l'écriture
+#               SYSCOHADA dans le module Compta → vérification
+#               d'intégrité → dashboard → journal d'audit.
+#               Toutes les données sont isolées par tenant_id (JWT).
+# ============================================================
+
+openapi: 3.0.0
+info:
+  title: Formuloo OS — GesDoc Service API
+  version: 1.0.0
+  description: >
+    Service de gestion documentaire intelligente de Formuloo OS.
+    Pipeline OCR (prétraitement OpenCV, Tesseract5, fallback EasyOCR,
+    extraction de champs structurés par regex) et certification
+    blockchain (ancrage du hash SHA-256 sur Ethereum). Crée
+    automatiquement l'écriture SYSCOHADA dans le module Comptabilité
+    dès la certification. Toutes les données sont isolées par
+    tenant_id (JWT).
+
+servers:
+  - url: http://localhost:8003/api/v1
+    description: Serveur de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Upload
+    description: Étape 1 — dépôt d'une pièce comptable, déclenche le pipeline OCR
+  - name: OCR
+    description: Étape 2 — suivi et résultat de l'extraction OCR
+  - name: Validation
+    description: Étape 3 — validation/correction humaine des données extraites
+  - name: Blockchain
+    description: Étape 4 — certification par ancrage blockchain du hash du document
+  - name: Comptabilite
+    description: Étape 5 — pré-remplissage et liaison avec une écriture du module Compta
+  - name: Integrite
+    description: Étape 6 — vérification d'intégrité (recalcul du hash vs on-chain)
+  - name: Dashboard
+    description: Liste et statistiques des documents archivés
+  - name: Audit
+    description: Étape 7 — journal d'audit, lecture seule, réservé aux administrateurs
+  - name: Fichiers
+    description: >
+      Service de fichiers local (choix d'architecture : volume Docker au
+      lieu de S3). Sert de cible aux URLs signées retournées par les
+      autres endpoints (file_url, preview_url, certified_pdf_url).
+
+paths:
+
+  # ── UPLOAD ─────────────────────────────────────────────────
+
+  /documents/upload/:
+    post:
+      tags: [Upload]
+      summary: Upload d'une pièce comptable
+      description: >
+        Déclenche le pipeline OCR en arrière-plan (tâche Celery
+        `task_ocr_pipeline`). Le document passe immédiatement en
+        statut `pending_ocr`.
+      x-required-permission: gesdoc.write.documents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadRequest'
+      responses:
+        '201':
+          description: Document reçu, tâche Celery déclenchée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Fichier manquant, type MIME invalide ou taille dépassée (max 20 Mo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: document_type invalide ou hors énumération
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── OCR ────────────────────────────────────────────────────
+
+  /documents/{id}/ocr-status/:
+    get:
+      tags: [OCR]
+      summary: Polling du statut de traitement OCR
+      description: >
+        Interrogé toutes les 2 s par le frontend. Stratégie recommandée :
+        intervalle 2 s, max 120 s, puis bascule WebSocket si disponible.
+      x-required-permission: gesdoc.read.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Statut courant du pipeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OCRStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /documents/{id}/ocr-result/:
+    get:
+      tags: [OCR]
+      summary: Résultat brut de l'extraction OCR
+      description: Disponible après passage au statut `extracted`.
+      x-required-permission: gesdoc.read.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Champs extraits avec score de confiance par champ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OCRResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── VALIDATION ─────────────────────────────────────────────
+
+  /documents/{id}/validate-ocr/:
+    post:
+      tags: [Validation]
+      summary: Soumission des données OCR validées (et corrigées)
+      description: >
+        Le statut passe à `validated`. Les corrections sont journalisées
+        dans le journal d'audit (`action=ocr_correction`). Déclenche
+        automatiquement la tâche de certification blockchain
+        (`task_blockchain_anchor`).
+      x-required-permission: gesdoc.write.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateOCRRequest'
+      responses:
+        '200':
+          description: Données validées
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateOCRResponse'
+        '400':
+          description: Champs requis manquants ou montants incohérents (TTC ≠ HT × (1 + TVA))
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Document déjà validé — double soumission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── BLOCKCHAIN ─────────────────────────────────────────────
+
+  /documents/{id}/blockchain-status/:
+    get:
+      tags: [Blockchain]
+      summary: Statut de l'ancrage blockchain
+      description: Polling post-validation.
+      x-required-permission: gesdoc.read.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Statut courant de l'ancrage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainStatus'
+        '400':
+          description: Document non encore validé — étape 3 manquante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /documents/{id}/blockchain-proof/:
+    get:
+      tags: [Blockchain]
+      summary: Preuve complète de certification blockchain
+      description: >
+        Utilisée par le bouton "Voir la preuve Blockchain". Peut être
+        partagée avec un commissaire aux comptes. `explorer_url` est un
+        lien direct Etherscan.
+      x-required-permission: gesdoc.read.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Preuve blockchain complète
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainProof'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── COMPTABILITÉ ───────────────────────────────────────────
+
+  /documents/{id}/accounting-prefill/:
+    get:
+      tags: [Comptabilite]
+      summary: Données pré-remplies pour l'écriture comptable
+      description: >
+        Suggestion d'écriture SYSCOHADA déduite de `document_type` et
+        `tva_rate`. Le comptable valide ou corrige dans le module
+        Comptabilité (`POST /api/v1/compta/ecritures/`).
+      x-required-permission: gesdoc.read.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Suggestion d'écriture SYSCOHADA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPrefill'
+        '400':
+          description: Document pas encore au statut `certified`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /documents/{id}/link-journal-entry/:
+    post:
+      tags: [Comptabilite]
+      summary: Lie une écriture comptable existante au document source
+      description: >
+        Crée la traçabilité bidirectionnelle document ↔ écriture.
+        Acteur principal : Système (auto) — dès qu'un document atteint le
+        statut certified, GesDoc appelle automatiquement l'endpoint interne
+        Compta POST /_internal/ecritures-achat/ pour créer l'écriture
+        SYSCOHADA et enregistre ici le journal_entry_id retourné (voir
+        task_blockchain_anchor). Cet endpoint public reste accessible au
+        Comptable comme filet de rattrapage (Compta indisponible au moment
+        de la certification, comptes manquants) ou pour corriger un
+        rattachement.
+      x-required-permission: gesdoc.write.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkJournalEntryRequest'
+      responses:
+        '200':
+          description: Écriture liée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkJournalEntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── INTÉGRITÉ ──────────────────────────────────────────────
+
+  /documents/{id}/verify-integrity/:
+    post:
+      tags: [Integrite]
+      summary: Vérifie l'intégrité du fichier
+      description: >
+        Recalcule le hash SHA-256 du fichier et le compare au hash ancré
+        on-chain. En cas de falsification (`tampered`), une entrée est
+        créée dans le journal d'audit (`action=integrity_alert`) et une
+        alerte est notifiée à l'administrateur.
+      x-required-permission: gesdoc.write.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: false
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Optionnel — re-upload pour re-vérification
+      responses:
+        '200':
+          description: Résultat de la vérification d'intégrité
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrityCheck'
+        '400':
+          description: Document non certifié (pas de hash on-chain)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── DASHBOARD ──────────────────────────────────────────────
+
+  /documents/:
+    get:
+      tags: [Dashboard]
+      summary: Liste paginée de tous les documents
+      description: Écran principal "Gestion documentaire" — pagination par curseur.
+      x-required-permission: gesdoc.read.documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_ocr, preprocessing, extracting, analyzing, extracted, validated, pending_chain, certified, tampered, failed]
+        - name: document_type
+          in: query
+          schema:
+            type: string
+            enum: [invoice, purchase_order, receipt]
+        - name: supplier
+          in: query
+          description: Recherche partielle (ILIKE)
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liste des documents + statistiques du dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── AUDIT ──────────────────────────────────────────────────
+
+  /documents/audit-log/:
+    get:
+      tags: [Audit]
+      summary: Journal d'audit complet
+      description: >
+        Lecture seule, filtrable, exportable. Aucun DELETE ni PATCH —
+        les enregistrements sont immuables. Réservé aux administrateurs.
+      x-required-permission: gesdoc.read.audit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [system, user, alerts]
+        - name: document_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [upload, ocr_extracted, ocr_validated, ocr_correction, certified, journal_linked, integrity_check, integrity_alert]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: export
+          in: query
+          description: Déclenche un export asynchrone
+          schema:
+            type: string
+            enum: [pdf, csv]
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Journal chronologique (ou 202 si export demandé)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Rôle insuffisant — accès réservé aux administrateurs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── FICHIERS (stockage local) ──────────────────────────────
+
+  /documents/files/{token}/:
+    get:
+      tags: [Fichiers]
+      summary: Sert un fichier via un token signé à expiration
+      description: >
+        Équivalent local d'une pre-signed URL S3 (choix d'architecture :
+        volume Docker plutôt que S3/MinIO). Le token, généré par les
+        autres endpoints, encode déjà l'autorisation d'accès et expire
+        après `SIGNED_URL_EXPIRY_SECONDS` (15 min par défaut) — aucun
+        Bearer JWT n'est requis sur cette route.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contenu du fichier (PDF ou image)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+
+    # ── UPLOAD ───────────────────────────────────────────────
+
+    UploadRequest:
+      type: object
+      required: [file, document_type]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: PDF, JPEG ou PNG — 20 Mo maximum
+        document_type:
+          type: string
+          enum: [invoice, purchase_order, receipt]
+        fiscal_year:
+          type: string
+          example: "2025"
+        notes:
+          type: string
+
+    UploadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: pending_ocr
+        document_type:
+          type: string
+          enum: [invoice, purchase_order, receipt]
+        file_url:
+          type: string
+          description: URL signée temporaire vers le fichier brut
+        task_id:
+          type: string
+          description: Identifiant de la tâche Celery — à conserver pour polling
+        created_at:
+          type: string
+          format: date-time
+
+    # ── OCR ──────────────────────────────────────────────────
+
+    OCRProgress:
+      type: object
+      properties:
+        preprocessing:
+          type: string
+          enum: [done, in_progress, pending]
+        extraction:
+          type: string
+          enum: [done, in_progress, pending]
+        fallback_ai:
+          type: string
+          enum: [done, in_progress, pending]
+
+    OCRStatus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending_ocr, preprocessing, extracting, analyzing, extracted, failed]
+        progress:
+          $ref: '#/components/schemas/OCRProgress'
+        ocr_engine:
+          type: string
+          enum: [tesseract5, easyocr, paddleocr]
+          nullable: true
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    OCRField:
+      type: object
+      properties:
+        value:
+          description: Valeur extraite (string ou nombre selon le champ)
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    OCRResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        raw_text:
+          type: string
+        fields:
+          type: object
+          properties:
+            document_number:
+              $ref: '#/components/schemas/OCRField'
+            date:
+              $ref: '#/components/schemas/OCRField'
+            supplier:
+              $ref: '#/components/schemas/OCRField'
+            amount_ht:
+              $ref: '#/components/schemas/OCRField'
+            tva_rate:
+              $ref: '#/components/schemas/OCRField'
+            amount_ttc:
+              $ref: '#/components/schemas/OCRField'
+        preview_url:
+          type: string
+          description: URL signée temporaire vers l'aperçu image
+        ocr_engine:
+          type: string
+          enum: [tesseract5, easyocr, paddleocr]
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    # ── VALIDATION ───────────────────────────────────────────
+
+    Correction:
+      type: object
+      properties:
+        field:
+          type: string
+        original:
+          description: Valeur d'origine extraite par l'OCR
+        corrected:
+          description: Valeur corrigée par le comptable
+
+    ValidateOCRRequest:
+      type: object
+      required: [document_number, date, supplier, amount_ht, tva_rate, amount_ttc, currency]
+      properties:
+        document_number:
+          type: string
+          example: "INV-2025-0217"
+        date:
+          type: string
+          format: date
+        supplier:
+          type: string
+        amount_ht:
+          type: number
+          format: decimal
+        tva_rate:
+          type: number
+          format: decimal
+        amount_ttc:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+        corrections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Correction'
+
+    ValidateOCRResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: validated
+        validated_by:
+          type: string
+          format: uuid
+        validated_at:
+          type: string
+          format: date-time
+        corrections_count:
+          type: integer
+
+    # ── BLOCKCHAIN ───────────────────────────────────────────
+
+    BlockchainStatus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending_chain, anchoring, certified, chain_error]
+        hash_sha256:
+          type: string
+        tx_hash:
+          type: string
+          nullable: true
+        block_number:
+          type: integer
+          nullable: true
+        blockchain:
+          type: string
+          example: ethereum
+        anchored_at:
+          type: string
+          format: date-time
+          nullable: true
+        certified_pdf_url:
+          type: string
+          nullable: true
+          description: URL signée temporaire vers le certificat PDF
+
+    BlockchainProof:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        document_number:
+          type: string
+        hash_sha256:
+          type: string
+        tx_hash:
+          type: string
+        block_number:
+          type: integer
+        blockchain:
+          type: string
+          example: ethereum
+        network:
+          type: string
+          example: sepolia
+        anchored_at:
+          type: string
+          format: date-time
+        explorer_url:
+          type: string
+          description: Lien Etherscan direct vers la transaction
+        certified_by:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+
+    # ── COMPTABILITÉ ─────────────────────────────────────────
+
+    JournalEntryLine:
+      type: object
+      properties:
+        account_code:
+          type: string
+          example: "6011"
+        label:
+          type: string
+        debit:
+          type: number
+          format: decimal
+        credit:
+          type: number
+          format: decimal
+
+    SuggestedJournalEntry:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        reference:
+          type: string
+        description:
+          type: string
+        journal_id:
+          type: integer
+          nullable: true
+          description: >
+            id du Journal Compta cible s'il a pu être résolu côté GesDoc ;
+            sinon null et le frontend résout le journal via journal_type
+            (GesDoc n'a pas de visibilité directe sur les journaux Compta).
+        journal_type:
+          type: string
+          enum: [VENTES, ACHATS, BANQUE, CAISSE, OD]
+          description: Type de journal Compta suggéré (voir GET /compta/journaux/)
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntryLine'
+
+    AccountingPrefill:
+      type: object
+      properties:
+        source_document_id:
+          type: string
+          format: uuid
+        suggested_journal_entry:
+          $ref: '#/components/schemas/SuggestedJournalEntry'
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    LinkJournalEntryRequest:
+      type: object
+      required: [journal_entry_id]
+      properties:
+        journal_entry_id:
+          type: integer
+          description: id de l'Ecriture créée côté module Compta
+
+    LinkJournalEntryResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        journal_entry_id:
+          type: integer
+        linked_at:
+          type: string
+          format: date-time
+
+    # ── INTÉGRITÉ ────────────────────────────────────────────
+
+    IntegrityCheck:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        integrity:
+          type: string
+          enum: [valid, tampered]
+        hash_on_chain:
+          type: string
+        hash_recalculated:
+          type: string
+        match:
+          type: boolean
+        verified_at:
+          type: string
+          format: date-time
+        alert_triggered:
+          type: boolean
+        alert_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    # ── DASHBOARD ────────────────────────────────────────────
+
+    DocumentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        supplier:
+          type: string
+        amount_ttc:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          enum: [XAF, EUR, USD]
+        status:
+          type: string
+          enum: [pending_ocr, preprocessing, extracting, analyzing, extracted, validated, pending_chain, certified, tampered, failed]
+        document_type:
+          type: string
+          enum: [invoice, purchase_order, receipt]
+        certified_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DocumentStats:
+      type: object
+      properties:
+        total_archived:
+          type: integer
+        certified_on_chain:
+          type: integer
+        in_processing:
+          type: integer
+        integrity_alerts:
+          type: integer
+
+    DocumentListResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+        next_cursor:
+          type: string
+          nullable: true
+        stats:
+          $ref: '#/components/schemas/DocumentStats'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentSummary'
+
+    # ── AUDIT ────────────────────────────────────────────────
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [upload, ocr_extracted, ocr_validated, ocr_correction, certified, journal_linked, integrity_check, integrity_alert]
+        label:
+          type: string
+        document_id:
+          type: string
+          format: uuid
+        document_number:
+          type: string
+        detail:
+          type: string
+        actor_type:
+          type: string
+          enum: [system, user]
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    AuditLogResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        next_cursor:
+          type: string
+          nullable: true
+
+    # ── ERREURS ──────────────────────────────────────────────
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token JWT absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

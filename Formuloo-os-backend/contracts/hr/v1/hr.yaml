@@ -1,0 +1,4588 @@
+openapi: 3.0.3
+info:
+  title: Formuloo OS — HR Service API
+  version: 2.2.0
+  description: Service de gestion des Ressources Humaines de Formuloo OS. Gère les
+    employés, postes, départements, contrats, congés, présences et fiches de paie
+    SYSCOHADA. Toutes les données sont isolées par tenant_id (JWT).
+    Notifications email automatiques (approbation/rejet congés, validation paie).
+    Génération PDF bulletins de paie (GET /payroll/{id}/pdf/).
+paths:
+  /api/v1/hr/contrats/:
+    get:
+      operationId: v1_hr_contrats_list
+      description: Retourne la liste paginée des contrats du tenant.
+      summary: Lister les contrats
+      tags:
+      - Contrats
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contrat'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+    post:
+      operationId: v1_hr_contrats_create
+      description: |-
+        GET  /api/v1/hr/contrats/ — Liste des contrats
+        POST /api/v1/hr/contrats/ — Créer un contrat
+      summary: Créer un contrat
+      tags:
+      - Contrats
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContratCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContratCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContratCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contrat'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/contrats/{id}/:
+    get:
+      operationId: v1_hr_contrats_retrieve
+      description: |-
+        GET    /api/v1/hr/contrats/{id}/ — Détail
+        PUT    /api/v1/hr/contrats/{id}/ — Modifier
+        DELETE /api/v1/hr/contrats/{id}/ — Résilier
+      summary: Détail d'un contrat
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Contrats
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contrat'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Contrat introuvable
+          description: ''
+    put:
+      operationId: v1_hr_contrats_update
+      description: |-
+        GET    /api/v1/hr/contrats/{id}/ — Détail
+        PUT    /api/v1/hr/contrats/{id}/ — Modifier
+        DELETE /api/v1/hr/contrats/{id}/ — Résilier
+      summary: Modifier un contrat
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Contrats
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContratCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContratCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContratCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contrat'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Contrat introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_contrats_destroy
+      description: |-
+        GET    /api/v1/hr/contrats/{id}/ — Détail
+        PUT    /api/v1/hr/contrats/{id}/ — Modifier
+        DELETE /api/v1/hr/contrats/{id}/ — Résilier
+      summary: Résilier un contrat
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Contrats
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Contrat résilié
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Contrat introuvable
+          description: ''
+  /api/v1/hr/declarations/cnps/:
+    get:
+      operationId: v1_hr_declarations_cnps_retrieve
+      description: 'Génère la déclaration mensuelle CNPS pour export. Inclut pour
+        chaque employé : numéro CNPS, salaire brut, cotisations salariales et patronales
+        calculées selon les taux légaux Cameroun 2024 (plafond 750 000 XAF/mois).
+        Accès réservé au RH Manager ou Comptable.'
+      summary: Déclaration mensuelle CNPS
+      parameters:
+      - in: query
+        name: annee
+        schema:
+          type: integer
+        description: 'Année. Défaut : année courante.'
+      - in: query
+        name: mois
+        schema:
+          type: integer
+        description: 'Mois (1-12). Défaut : mois précédent.'
+      tags:
+      - Déclarations Réglementaires
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Liste des employés avec cotisations CNPS
+          description: ''
+  /api/v1/hr/declarations/irpp/:
+    get:
+      operationId: v1_hr_declarations_irpp_retrieve
+      description: Calcule l'IRPP mensuel estimé par employé selon le barème progressif
+        DGI Cameroun 2024. Inclut la déduction forfaitaire de 30% pour frais professionnels.
+        Résultat non contractuel — dépend des charges de famille. Accès réservé au
+        RH Manager ou Comptable.
+      summary: Simulation IRPP mensuel
+      parameters:
+      - in: query
+        name: annee
+        schema:
+          type: integer
+        description: Année.
+      - in: query
+        name: mois
+        schema:
+          type: integer
+        description: Mois (1-12).
+      tags:
+      - Déclarations Réglementaires
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: IRPP estimé par employé
+          description: ''
+  /api/v1/hr/demandes-document/:
+    get:
+      operationId: v1_hr_demandes_document_list
+      description: 'Liste toutes les demandes de document du tenant. Par défaut :
+        demandes en attente de traitement.'
+      summary: Toutes les demandes de documents (RH)
+      parameters:
+      - in: query
+        name: statut
+        schema:
+          type: string
+        description: 'Filtrer par statut — défaut : en_attente'
+      - in: query
+        name: type_document
+        schema:
+          type: string
+        description: 'Filtrer par type : attestation_travail, attestation_salaire,
+          bulletin_paie_copie'
+      tags:
+      - Demandes Documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+  /api/v1/hr/demandes-document/{id}/approuver/:
+    post:
+      operationId: v1_hr_demandes_document_approuver_create
+      description: Approuve la demande et génère les données structurées du document.
+        L'employé peut ensuite télécharger son document via GET /me/demandes-document/{pk}/.
+      summary: Approuver une demande de document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Demandes Documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Demande déjà traitée
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Demande introuvable
+          description: ''
+  /api/v1/hr/demandes-document/{id}/rejeter/:
+    post:
+      operationId: v1_hr_demandes_document_rejeter_create
+      description: Rejette la demande avec un motif expliqué à l'employé. Le motif
+        est visible dans l'espace self-service de l'employé.
+      summary: Rejeter une demande de document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Demandes Documents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejeterDemandeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RejeterDemandeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RejeterDemandeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Demande déjà traitée ou motif manquant
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Demande introuvable
+          description: ''
+  /api/v1/hr/departements/:
+    get:
+      operationId: v1_hr_departements_list
+      description: Retourne la liste paginée des départements du tenant.
+      summary: Lister les départements
+      tags:
+      - Departements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Departement'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+    post:
+      operationId: v1_hr_departements_create
+      description: |-
+        GET  /api/v1/hr/departements/ — Liste des départements
+        POST /api/v1/hr/departements/ — Créer un département
+      summary: Créer un département
+      tags:
+      - Departements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartementCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DepartementCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DepartementCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Departement'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/departements/{id}/:
+    get:
+      operationId: v1_hr_departements_retrieve
+      description: |-
+        GET    /api/v1/hr/departements/{id}/ — Détail
+        PUT    /api/v1/hr/departements/{id}/ — Modifier
+        DELETE /api/v1/hr/departements/{id}/ — Archiver
+      summary: Détail d'un département
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Departements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Departement'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Département introuvable
+          description: ''
+    put:
+      operationId: v1_hr_departements_update
+      description: |-
+        GET    /api/v1/hr/departements/{id}/ — Détail
+        PUT    /api/v1/hr/departements/{id}/ — Modifier
+        DELETE /api/v1/hr/departements/{id}/ — Archiver
+      summary: Modifier un département
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Departements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartementCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DepartementCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DepartementCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Departement'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Département introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_departements_destroy
+      description: |-
+        GET    /api/v1/hr/departements/{id}/ — Détail
+        PUT    /api/v1/hr/departements/{id}/ — Modifier
+        DELETE /api/v1/hr/departements/{id}/ — Archiver
+      summary: Archiver un département
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Departements
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Département archivé
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Département contient des employés actifs
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Département introuvable
+          description: ''
+  /api/v1/hr/departements/tree/:
+    get:
+      operationId: v1_hr_departements_tree_list
+      description: Retourne l'arbre complet des départements.
+      summary: Organigramme hiérarchique
+      tags:
+      - Departements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DepartementTree'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/employes/:
+    get:
+      operationId: v1_hr_employes_list
+      description: Retourne la liste paginée des employés du tenant.
+      summary: Lister les employés
+      tags:
+      - Employes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Employe'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+    post:
+      operationId: v1_hr_employes_create
+      description: |-
+        GET  /api/v1/hr/employes/ — Liste des employés
+        POST /api/v1/hr/employes/ — Créer un employé
+      summary: Créer un employé
+      tags:
+      - Employes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmployeCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmployeCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/employes/{id}/:
+    get:
+      operationId: v1_hr_employes_retrieve
+      description: |-
+        GET    /api/v1/hr/employes/{id}/ — Détail
+        PATCH  /api/v1/hr/employes/{id}/ — Modifier
+        DELETE /api/v1/hr/employes/{id}/ — Archiver
+      summary: Détail d'un employé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Employes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+    patch:
+      operationId: v1_hr_employes_partial_update
+      description: |-
+        GET    /api/v1/hr/employes/{id}/ — Détail
+        PATCH  /api/v1/hr/employes/{id}/ — Modifier
+        DELETE /api/v1/hr/employes/{id}/ — Archiver
+      summary: Modifier un employé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Employes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployeUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployeUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployeUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_employes_destroy
+      description: |-
+        GET    /api/v1/hr/employes/{id}/ — Détail
+        PATCH  /api/v1/hr/employes/{id}/ — Modifier
+        DELETE /api/v1/hr/employes/{id}/ — Archiver
+      summary: Archiver un employé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Employes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Employé archivé
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+  /api/v1/hr/employes/{id}/attestation/:
+    get:
+      operationId: v1_hr_employes_attestation_retrieve
+      description: Retourne les données brutes d'une attestation de travail pour un
+        employé. Réservé au RH Manager — pour la délivrance officielle à l'employé,
+        utiliser le workflow POST /me/demandes-document/ + approbation RH.
+      summary: Prévisualisation attestation de travail (RH)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Déclarations Réglementaires
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Données de l'attestation de travail
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: RH Manager requis
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+  /api/v1/hr/employes/{id}/conges/:
+    get:
+      operationId: v1_hr_employes_conges_list
+      description: |-
+        GET /api/v1/hr/employes/{id}/conges/
+        Congés d'un employé spécifique.
+      summary: Congés d'un employé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Employes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conge'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+  /api/v1/hr/employes/{id}/contrats/:
+    get:
+      operationId: v1_hr_employes_contrats_list
+      description: |-
+        GET /api/v1/hr/employes/{id}/contrats/
+        Contrats d'un employé spécifique.
+      summary: Contrats d'un employé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Employes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contrat'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+  /api/v1/hr/employes/{id}/payslips/:
+    get:
+      operationId: v1_hr_employes_payslips_list
+      description: |-
+        GET /api/v1/hr/employes/{id}/payslips/
+        Fiches de paie d'un employé spécifique.
+      summary: Fiches de paie d'un employé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Employes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Employé introuvable
+          description: ''
+  /api/v1/hr/leaves/:
+    get:
+      operationId: v1_hr_leaves_list
+      description: Retourne la liste paginée des congés du tenant.
+      summary: Lister les demandes de congés
+      tags:
+      - Conges
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conge'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+    post:
+      operationId: v1_hr_leaves_create
+      description: |-
+        GET  /api/v1/hr/leaves/ — Liste des congés
+        POST /api/v1/hr/leaves/ — Soumettre une demande
+      summary: Soumettre une demande de congé
+      tags:
+      - Conges
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/leaves/{id}/:
+    get:
+      operationId: v1_hr_leaves_retrieve
+      description: |-
+        GET    /api/v1/hr/leaves/{id}/ — Détail
+        PUT    /api/v1/hr/leaves/{id}/ — Modifier
+        DELETE /api/v1/hr/leaves/{id}/ — Annuler
+      summary: Détail d'une demande de congé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Conges
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Congé introuvable
+          description: ''
+    put:
+      operationId: v1_hr_leaves_update
+      description: |-
+        GET    /api/v1/hr/leaves/{id}/ — Détail
+        PUT    /api/v1/hr/leaves/{id}/ — Modifier
+        DELETE /api/v1/hr/leaves/{id}/ — Annuler
+      summary: Modifier une demande de congé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Conges
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Congé introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_leaves_destroy
+      description: |-
+        GET    /api/v1/hr/leaves/{id}/ — Détail
+        PUT    /api/v1/hr/leaves/{id}/ — Modifier
+        DELETE /api/v1/hr/leaves/{id}/ — Annuler
+      summary: Annuler une demande de congé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Conges
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Demande annulée
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Impossible d'annuler
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Congé introuvable
+          description: ''
+  /api/v1/hr/leaves/{id}/approve/:
+    post:
+      operationId: v1_hr_leaves_approve_create
+      description: |-
+        POST /api/v1/hr/leaves/{id}/approve/
+        Approuver une demande de congé.
+      summary: Approuver une demande de congé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Conges
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeApprouverRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CongeApprouverRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CongeApprouverRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Solde insuffisant
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Congé introuvable
+          description: ''
+  /api/v1/hr/leaves/{id}/reject/:
+    post:
+      operationId: v1_hr_leaves_reject_create
+      description: |-
+        POST /api/v1/hr/leaves/{id}/reject/
+        Rejeter une demande de congé.
+      summary: Rejeter une demande de congé
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Conges
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeRejeterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CongeRejeterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CongeRejeterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Motif obligatoire
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Congé introuvable
+          description: ''
+  /api/v1/hr/me/:
+    get:
+      operationId: v1_hr_me_retrieve
+      description: Retourne la fiche RH de l'employé connecté. L'employé est identifié
+        par l'auth_user_id contenu dans son JWT. Retourne 404 si aucune fiche n'est
+        liée au compte utilisateur.
+      summary: Mon profil employé
+      tags:
+      - Self-Service Employé
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Aucune fiche employé liée à ce compte
+          description: ''
+  /api/v1/hr/me/conges/:
+    get:
+      operationId: v1_hr_me_conges_list
+      description: 'Liste toutes les demandes de congé de l''employé connecté. Filtres
+        optionnels : statut (pending/approved/rejected), annee.'
+      summary: Mes demandes de congé
+      parameters:
+      - in: query
+        name: annee
+        schema:
+          type: integer
+        description: 'Filtrer par année (ex: 2024)'
+      - in: query
+        name: statut
+        schema:
+          type: string
+        description: 'Filtrer par statut : pending, approved, rejected'
+      tags:
+      - Self-Service Employé
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conge'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Aucune fiche employé liée
+          description: ''
+    post:
+      operationId: v1_hr_me_conges_create
+      description: Crée une demande de congé pour l'employé connecté. Le statut initial
+        est toujours 'pending' (en attente d'approbation).
+      summary: Soumettre une demande de congé
+      tags:
+      - Self-Service Employé
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CongeCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides ou chevauchement de dates
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Aucune fiche employé liée
+          description: ''
+  /api/v1/hr/me/demandes-document/:
+    get:
+      operationId: v1_hr_me_demandes_document_list
+      description: Liste toutes les demandes de document soumises par l'employé connecté.
+        Les données du document (document_data) ne sont visibles qu'après approbation
+        par le RH.
+      summary: Mes demandes de document
+      parameters:
+      - in: query
+        name: statut
+        schema:
+          type: string
+        description: 'Filtrer par statut : en_attente, approuvee, rejetee, annulee'
+      tags:
+      - Demandes Documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+    post:
+      operationId: v1_hr_me_demandes_document_create
+      description: 'Soumet une demande officielle de document au RH Manager. Le document
+        ne sera accessible qu''après approbation du RH. Types disponibles : attestation_travail,
+        attestation_salaire, bulletin_paie_copie.'
+      summary: Soumettre une demande de document
+      tags:
+      - Demandes Documents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemandeDocumentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DemandeDocumentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DemandeDocumentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Aucune fiche employé liée
+          description: ''
+  /api/v1/hr/me/demandes-document/{id}/:
+    get:
+      operationId: v1_hr_me_demandes_document_retrieve
+      description: Retourne le détail d'une demande et, si elle est approuvée, les
+        données structurées du document pour génération PDF par le frontend.
+      summary: Détail d'une demande de document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Demandes Documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Cette demande ne vous appartient pas
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Demande introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_me_demandes_document_destroy
+      description: Annule une demande encore en attente. Impossible si déjà traitée.
+      summary: Annuler une demande de document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Demandes Documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandeDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: La demande a déjà été traitée
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Demande introuvable
+          description: ''
+  /api/v1/hr/me/fiches-paie/:
+    get:
+      operationId: v1_hr_me_fiches_paie_list
+      description: 'Liste les fiches de paie validées ou payées de l''employé connecté.
+        Les brouillons ne sont pas visibles pour l''employé. Filtre optionnel : annee.'
+      summary: Mes fiches de paie
+      parameters:
+      - in: query
+        name: annee
+        schema:
+          type: integer
+        description: 'Filtrer par année (ex: 2024)'
+      tags:
+      - Self-Service Employé
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Aucune fiche employé liée
+          description: ''
+  /api/v1/hr/me/presences/:
+    get:
+      operationId: v1_hr_me_presences_list
+      description: 'Liste les présences de l''employé connecté. Par défaut : mois
+        courant. Filtres optionnels : mois (1-12), annee.'
+      summary: Mes présences
+      parameters:
+      - in: query
+        name: annee
+        schema:
+          type: integer
+        description: 'Année à filtrer. Défaut : année courante.'
+      - in: query
+        name: mois
+        schema:
+          type: integer
+        description: 'Mois à filtrer (1-12). Défaut : mois courant.'
+      tags:
+      - Self-Service Employé
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Presence'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Aucune fiche employé liée
+          description: ''
+  /api/v1/hr/payroll/:
+    get:
+      operationId: v1_hr_payroll_list
+      description: Retourne la liste paginée des fiches de paie du tenant.
+      summary: Lister les fiches de paie
+      tags:
+      - Paies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+    post:
+      operationId: v1_hr_payroll_create
+      description: |-
+        GET  /api/v1/hr/payroll/ — Liste des fiches de paie
+        POST /api/v1/hr/payroll/ — Générer une fiche de paie
+      summary: Générer une fiche de paie
+      tags:
+      - Paies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FichePaieCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FichePaieCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FichePaieCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/payroll/{id}/:
+    get:
+      operationId: v1_hr_payroll_retrieve
+      description: |-
+        GET    /api/v1/hr/payroll/{id}/ — Détail
+        PUT    /api/v1/hr/payroll/{id}/ — Modifier
+        DELETE /api/v1/hr/payroll/{id}/ — Supprimer
+      summary: Détail d'une fiche de paie
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Paies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fiche introuvable
+          description: ''
+    put:
+      operationId: v1_hr_payroll_update
+      description: |-
+        GET    /api/v1/hr/payroll/{id}/ — Détail
+        PUT    /api/v1/hr/payroll/{id}/ — Modifier
+        DELETE /api/v1/hr/payroll/{id}/ — Supprimer
+      summary: Modifier une fiche de paie
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Paies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FichePaieCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FichePaieCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FichePaieCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Fiche déjà validée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fiche introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_payroll_destroy
+      description: |-
+        GET    /api/v1/hr/payroll/{id}/ — Détail
+        PUT    /api/v1/hr/payroll/{id}/ — Modifier
+        DELETE /api/v1/hr/payroll/{id}/ — Supprimer
+      summary: Supprimer une fiche de paie
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Paies
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Fiche supprimée
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Fiche déjà validée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fiche introuvable
+          description: ''
+  /api/v1/hr/payroll/{id}/payer/:
+    post:
+      operationId: v1_hr_payroll_payer_create
+      description: |-
+        POST /api/v1/hr/payroll/{id}/payer/
+        Marquer une fiche comme payée.
+      summary: Marquer une fiche comme payée
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Paies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FichePaiePayerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FichePaiePayerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FichePaiePayerRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Fiche non validée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fiche introuvable
+          description: ''
+  /api/v1/hr/payroll/{id}/valider/:
+    post:
+      operationId: v1_hr_payroll_valider_create
+      description: |-
+        POST /api/v1/hr/payroll/{id}/valider/
+        Valider une fiche de paie.
+      summary: Valider une fiche de paie
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Paies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Fiche déjà validée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fiche introuvable
+          description: ''
+  /api/v1/hr/payroll/{id}/pdf/:
+    get:
+      operationId: v1_hr_payroll_pdf_retrieve
+      description: |-
+        GET /api/v1/hr/payroll/{id}/pdf/
+        Génère et retourne le bulletin de paie en PDF (ReportLab A4).
+        Accès : RH Manager, Comptable, ou l'employé concerné (IsOwnerOrRH).
+        Réservé aux fiches validées ou payées — les brouillons retournent 400.
+      summary: Télécharger le bulletin de paie en PDF
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Paies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Bulletin de paie PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Fiche en brouillon — PDF non disponible
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fiche introuvable
+          description: ''
+  /api/v1/hr/payroll/periode/{periode}/:
+    get:
+      operationId: v1_hr_payroll_periode_list
+      description: Retourne toutes les fiches d'une période (format YYYY-MM).
+      summary: Fiches de paie d'une période
+      parameters:
+      - in: path
+        name: periode
+        schema:
+          type: string
+        required: true
+      tags:
+      - Paies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FichePaie'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Format de période invalide
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/payroll/run/:
+    post:
+      operationId: v1_hr_payroll_run_create
+      description: Génère les fiches de paie pour tous les employés actifs du tenant.
+      summary: Lancer la génération de paie en masse
+      tags:
+      - Paies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayrollRunRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PayrollRunRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PayrollRunRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                description: Génération lancée
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/postes/:
+    get:
+      operationId: v1_hr_postes_list
+      description: Retourne la liste paginée des postes du tenant.
+      summary: Lister les postes
+      tags:
+      - Postes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Poste'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+    post:
+      operationId: v1_hr_postes_create
+      description: |-
+        GET  /api/v1/hr/postes/ — Liste des postes
+        POST /api/v1/hr/postes/ — Créer un poste
+      summary: Créer un poste
+      tags:
+      - Postes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PosteCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PosteCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PosteCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poste'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/hr/postes/{id}/:
+    get:
+      operationId: v1_hr_postes_retrieve
+      description: |-
+        GET    /api/v1/hr/postes/{id}/ — Détail
+        PUT    /api/v1/hr/postes/{id}/ — Modifier
+        DELETE /api/v1/hr/postes/{id}/ — Supprimer
+      summary: Détail d'un poste
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Postes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poste'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Poste introuvable
+          description: ''
+    put:
+      operationId: v1_hr_postes_update
+      description: |-
+        GET    /api/v1/hr/postes/{id}/ — Détail
+        PUT    /api/v1/hr/postes/{id}/ — Modifier
+        DELETE /api/v1/hr/postes/{id}/ — Supprimer
+      summary: Modifier un poste
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Postes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PosteCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PosteCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PosteCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poste'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Poste introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_postes_destroy
+      description: |-
+        GET    /api/v1/hr/postes/{id}/ — Détail
+        PUT    /api/v1/hr/postes/{id}/ — Modifier
+        DELETE /api/v1/hr/postes/{id}/ — Supprimer
+      summary: Supprimer un poste
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Postes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Poste désactivé
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Des employés actifs occupent ce poste
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Poste introuvable
+          description: ''
+  /api/v1/hr/presences/:
+    get:
+      operationId: v1_hr_presences_list
+      description: Retourne la liste paginée des pointages actifs du tenant.
+      summary: Lister les présences
+      tags:
+      - Presences
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Presence'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+    post:
+      operationId: v1_hr_presences_create
+      description: |-
+        GET  /api/v1/hr/presences/ — Liste des présences
+        POST /api/v1/hr/presences/ — Enregistrer une présence
+      summary: Enregistrer une présence
+      tags:
+      - Presences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PresenceCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PresenceCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+  /api/v1/hr/presences/{id}/:
+    get:
+      operationId: v1_hr_presences_retrieve
+      description: |-
+        GET    /api/v1/hr/presences/{id}/ — Détail
+        PUT    /api/v1/hr/presences/{id}/ — Modifier
+        DELETE /api/v1/hr/presences/{id}/ — Archiver (soft delete)
+      summary: Détail d'une présence
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Presences
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Présence introuvable
+          description: ''
+    put:
+      operationId: v1_hr_presences_update
+      description: |-
+        GET    /api/v1/hr/presences/{id}/ — Détail
+        PUT    /api/v1/hr/presences/{id}/ — Modifier
+        DELETE /api/v1/hr/presences/{id}/ — Archiver (soft delete)
+      summary: Modifier une présence
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Presences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PresenceCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PresenceCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Données invalides
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Présence introuvable
+          description: ''
+    delete:
+      operationId: v1_hr_presences_destroy
+      description: Archive la présence (soft delete). L'historique est conservé pour
+        audit et litiges.
+      summary: Archiver une présence
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Presences
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Présence archivée
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Présence introuvable
+          description: ''
+  /api/v1/hr/soldes-conges/:
+    get:
+      operationId: v1_hr_soldes_conges_list
+      description: Retourne les soldes de congés du tenant.
+      summary: Lister les soldes de congés
+      tags:
+      - SoldesConges
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SoldeConges'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+  /api/v1/hr/soldes-conges/{id}/:
+    get:
+      operationId: v1_hr_soldes_conges_retrieve
+      description: GET /api/v1/hr/soldes-conges/{id}/ — Détail
+      summary: Détail d'un solde de congés
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - SoldesConges
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoldeConges'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: Token JWT absent ou invalide
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: Accès refusé
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Solde introuvable
+          description: ''
+  /api/v1/hr/stats/:
+    get:
+      operationId: v1_hr_stats_retrieve
+      description: 'Retourne les indicateurs RH clés : effectifs, congés en attente,
+        masse salariale du mois, présences. Accès réservé au Manager et au RH Manager.'
+      summary: Tableau de bord RH
+      tags:
+      - Statistiques RH
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Statistiques RH du tenant
+          description: ''
+components:
+  schemas:
+    BlankEnum:
+      enum:
+      - ''
+    Conge:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/leaves/
+        GET /hr/leaves/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee:
+          type: string
+          readOnly: true
+        type_conge:
+          allOf:
+          - $ref: '#/components/schemas/TypeCongeD98Enum'
+          description: |-
+            Type de congé demandé
+
+            * `annuel` - Congé annuel
+            * `maladie` - Congé maladie
+            * `maternite` - Congé maternité
+            * `paternite` - Congé paternité
+            * `sans_solde` - Congé sans solde
+            * `exceptionnel` - Congé exceptionnel
+            * `recuperation` - Récupération
+            * `formation` - Formation
+            * `deces` - Décès famille
+        start_date:
+          type: string
+          format: date
+          description: Date de début du congé
+        end_date:
+          type: string
+          format: date
+          description: Date de fin du congé
+        days:
+          type: integer
+          readOnly: true
+          description: Nombre de jours calendaires — calculé auto
+        jours_ouvres:
+          type: integer
+          readOnly: true
+          description: Nombre de jours ouvrés — calculé auto
+        reason:
+          type: string
+          nullable: true
+          description: Motif de la demande de congé
+        piece_justificative:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du justificatif (arrêt maladie, etc.)
+          maxLength: 200
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CongeStatusEnum'
+          readOnly: true
+          description: |-
+            Statut de la demande
+
+            * `pending` - En attente
+            * `approved` - Approuvé
+            * `rejected` - Rejeté
+            * `annule` - Annulé
+        approved_by:
+          type: string
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Date et heure de la décision
+        commentaire_decision:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Commentaire d'approbation ou motif de rejet
+        remplacant:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_at
+      - approved_by
+      - commentaire_decision
+      - created_at
+      - days
+      - employee
+      - end_date
+      - id
+      - jours_ouvres
+      - remplacant
+      - start_date
+      - status
+      - type_conge
+      - updated_at
+    CongeApprouverRequest:
+      type: object
+      description: |-
+        Serializer pour approuver une demande de congé.
+        POST /hr/leaves/{id}/approve/
+      properties:
+        commentaire:
+          type: string
+          description: Commentaire optionnel
+    CongeCreateRequest:
+      type: object
+      description: |-
+        Serializer pour soumettre une demande de congé.
+        POST /hr/leaves/
+        PUT  /hr/leaves/{id}/
+
+        Validations :
+        1. Date de fin après date de début
+        2. Pas de chevauchement avec congés existants
+        3. Remplaçant existe et est actif
+      properties:
+        type_conge:
+          allOf:
+          - $ref: '#/components/schemas/TypeCongeD98Enum'
+          description: |-
+            Type de congé demandé
+
+            * `annuel` - Congé annuel
+            * `maladie` - Congé maladie
+            * `maternite` - Congé maternité
+            * `paternite` - Congé paternité
+            * `sans_solde` - Congé sans solde
+            * `exceptionnel` - Congé exceptionnel
+            * `recuperation` - Récupération
+            * `formation` - Formation
+            * `deces` - Décès famille
+        start_date:
+          type: string
+          format: date
+          description: Date de début du congé
+        end_date:
+          type: string
+          format: date
+          description: Date de fin du congé
+        reason:
+          type: string
+          nullable: true
+          description: Motif de la demande de congé
+        piece_justificative:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du justificatif (arrêt maladie, etc.)
+          maxLength: 200
+        remplacant_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID de l'employé remplaçant
+      required:
+      - end_date
+      - start_date
+      - type_conge
+    CongeRejeterRequest:
+      type: object
+      description: |-
+        Serializer pour rejeter une demande de congé.
+        POST /hr/leaves/{id}/reject/
+        Le motif est obligatoire.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Motif obligatoire du rejet
+      required:
+      - reason
+    CongeStatusEnum:
+      enum:
+      - pending
+      - approved
+      - rejected
+      - annule
+      type: string
+      description: |-
+        * `pending` - En attente
+        * `approved` - Approuvé
+        * `rejected` - Rejeté
+        * `annule` - Annulé
+    Contrat:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/contrats/
+        GET /hr/contrats/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        numero:
+          type: string
+          readOnly: true
+          description: 'Numéro unique auto-généré — ex: CTR-2024-001'
+        employee:
+          type: string
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/TypeEnum'
+          description: |-
+            Type de contrat conforme CDC
+
+            * `CDI` - Contrat à Durée Indéterminée
+            * `CDD` - Contrat à Durée Déterminée
+            * `Interim` - Intérim
+            * `Stage` - Stage
+            * `Freelance` - Freelance
+        start_date:
+          type: string
+          format: date
+          description: Date de début du contrat
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date de fin — null pour les CDI
+        trial_period:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Durée de la période d'essai en jours
+        gross_salary:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Salaire brut mensuel contractuel
+        currency:
+          type: string
+          description: Devise (XAF, EUR, USD...)
+          maxLength: 10
+        work_hours_per_week:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Heures de travail par semaine
+        periodicite_paie:
+          allOf:
+          - $ref: '#/components/schemas/PeriodicitePaieEnum'
+          description: |-
+            Fréquence de paiement du salaire
+
+            * `mensuel` - Mensuel
+            * `bimensuel` - Bimensuel
+            * `hebdomadaire` - Hebdomadaire
+        jours_conge_annuel:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Nombre de jours de congé annuel
+        lieu_travail:
+          type: string
+          nullable: true
+          description: Lieu de travail principal
+          maxLength: 200
+        poste:
+          type: string
+          nullable: true
+          description: Intitulé du poste dans le contrat
+          maxLength: 100
+        statut:
+          $ref: '#/components/schemas/ContratStatutEnum'
+        is_active:
+          type: boolean
+          description: Contrat actif ou archivé
+        motif_resiliation:
+          type: string
+          nullable: true
+          description: Motif de résiliation du contrat
+        date_resiliation:
+          type: string
+          format: date
+          nullable: true
+          description: Date de résiliation
+        document_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du contrat signé numérisé
+          maxLength: 200
+        signed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date et heure de signature du contrat
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - employee
+      - gross_salary
+      - id
+      - numero
+      - start_date
+      - type
+      - updated_at
+    ContratCreateRequest:
+      type: object
+      description: |-
+        Serializer pour créer/modifier un contrat.
+        POST /hr/contrats/
+        PUT  /hr/contrats/{id}/
+
+        Validations :
+        1. Employé existe dans le tenant
+        2. CDD/Stage → date de fin obligatoire
+        3. Date de fin après date de début
+        4. Un seul contrat actif par employé
+        5. Salaire >= SMIG Cameroun (36 270 XAF)
+      properties:
+        employe_id:
+          type: string
+          format: uuid
+          description: UUID de l'employé
+        type:
+          allOf:
+          - $ref: '#/components/schemas/TypeEnum'
+          description: |-
+            Type de contrat conforme CDC
+
+            * `CDI` - Contrat à Durée Indéterminée
+            * `CDD` - Contrat à Durée Déterminée
+            * `Interim` - Intérim
+            * `Stage` - Stage
+            * `Freelance` - Freelance
+        start_date:
+          type: string
+          format: date
+          description: Date de début du contrat
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date de fin — null pour les CDI
+        trial_period:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: Durée de la période d'essai en jours
+        gross_salary:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Salaire brut mensuel contractuel
+        currency:
+          type: string
+          minLength: 1
+          description: Devise (XAF, EUR, USD...)
+          maxLength: 10
+        work_hours_per_week:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Heures de travail par semaine
+        periodicite_paie:
+          allOf:
+          - $ref: '#/components/schemas/PeriodicitePaieEnum'
+          description: |-
+            Fréquence de paiement du salaire
+
+            * `mensuel` - Mensuel
+            * `bimensuel` - Bimensuel
+            * `hebdomadaire` - Hebdomadaire
+        jours_conge_annuel:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Nombre de jours de congé annuel
+        lieu_travail:
+          type: string
+          nullable: true
+          description: Lieu de travail principal
+          maxLength: 200
+        poste:
+          type: string
+          nullable: true
+          description: Intitulé du poste dans le contrat
+          maxLength: 100
+        document_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du contrat signé numérisé
+          maxLength: 200
+        signed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date et heure de signature du contrat
+      required:
+      - employe_id
+      - gross_salary
+      - start_date
+      - type
+    ContratStatutEnum:
+      enum:
+      - en_attente
+      - actif
+      - expire
+      - resilie
+      - suspendu
+      type: string
+      description: |-
+        * `en_attente` - En attente
+        * `actif` - Actif
+        * `expire` - Expiré
+        * `resilie` - Résilié
+        * `suspendu` - Suspendu
+    DemandeDocument:
+      type: object
+      description: Lecture complète d'une demande de document.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        type_document:
+          allOf:
+          - $ref: '#/components/schemas/TypeDocumentEnum'
+          readOnly: true
+          description: |-
+            Type de document demandé
+
+            * `attestation_travail` - Attestation de travail
+            * `attestation_salaire` - Attestation de salaire
+            * `bulletin_paie_copie` - Copie de bulletin de paie
+        type_document_display:
+          type: string
+          readOnly: true
+        statut:
+          allOf:
+          - $ref: '#/components/schemas/DemandeDocumentStatutEnum'
+          readOnly: true
+          description: |-
+            Statut de traitement de la demande
+
+            * `en_attente` - En attente de traitement
+            * `approuvee` - Approuvée
+            * `rejetee` - Rejetée
+            * `annulee` - Annulée par l'employé
+        statut_display:
+          type: string
+          readOnly: true
+        motif_demande:
+          type: string
+          readOnly: true
+          nullable: true
+          description: 'Raison de la demande (optionnel — ex: visa, prêt bancaire)'
+        motif_rejet:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Motif du rejet — obligatoire si statut=REJETEE
+        document_data:
+          readOnly: true
+          nullable: true
+          description: Données structurées du document généré — disponibles après
+            approbation
+        traitee_le:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Date et heure du traitement
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - document_data
+      - id
+      - motif_demande
+      - motif_rejet
+      - statut
+      - statut_display
+      - traitee_le
+      - type_document
+      - type_document_display
+      - updated_at
+    DemandeDocumentCreateRequest:
+      type: object
+      description: Soumission d'une nouvelle demande de document par l'employé.
+      properties:
+        type_document:
+          allOf:
+          - $ref: '#/components/schemas/TypeDocumentEnum'
+          description: |-
+            Type de document : attestation_travail, attestation_salaire, bulletin_paie_copie
+
+            * `attestation_travail` - Attestation de travail
+            * `attestation_salaire` - Attestation de salaire
+            * `bulletin_paie_copie` - Copie de bulletin de paie
+        motif_demande:
+          type: string
+          description: 'Raison de la demande (optionnel — ex: demande de visa, prêt
+            bancaire)'
+          maxLength: 500
+      required:
+      - type_document
+    DemandeDocumentStatutEnum:
+      enum:
+      - en_attente
+      - approuvee
+      - rejetee
+      - annulee
+      type: string
+      description: |-
+        * `en_attente` - En attente de traitement
+        * `approuvee` - Approuvée
+        * `rejetee` - Rejetée
+        * `annulee` - Annulée par l'employé
+    Departement:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/departements/
+        GET /hr/departements/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nom:
+          type: string
+          description: Nom du département
+          maxLength: 100
+        code:
+          type: string
+          description: Code unique du département dans le tenant
+          maxLength: 50
+        description:
+          type: string
+          nullable: true
+          description: Description du rôle du département
+        parent:
+          allOf:
+          - $ref: '#/components/schemas/DepartementBrief'
+          readOnly: true
+        responsable:
+          type: string
+          readOnly: true
+        budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          nullable: true
+          description: Budget annuel alloué au département
+        devise:
+          type: string
+          description: Devise du budget (XAF par défaut)
+          maxLength: 10
+        nb_employes:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          description: False = département archivé
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - nb_employes
+      - nom
+      - parent
+      - responsable
+      - updated_at
+    DepartementBrief:
+      type: object
+      description: |-
+        Version simplifiée du département.
+        Utilisée dans les références d'autres serializers.
+        Ex: dans EmployeSerializer pour afficher le département.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nom:
+          type: string
+          description: Nom du département
+          maxLength: 100
+        code:
+          type: string
+          description: Code unique du département dans le tenant
+          maxLength: 50
+      required:
+      - code
+      - id
+      - nom
+    DepartementCreateRequest:
+      type: object
+      description: |-
+        Serializer pour créer/modifier un département.
+        POST /hr/departements/
+        PUT  /hr/departements/{id}/
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          description: Nom du département
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          description: Code unique du département dans le tenant
+          maxLength: 50
+        description:
+          type: string
+          nullable: true
+          description: Description du rôle du département
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID du département parent
+        responsable_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID de l'employé responsable
+        budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          nullable: true
+          description: Budget annuel alloué au département
+        devise:
+          type: string
+          minLength: 1
+          description: Devise du budget (XAF par défaut)
+          maxLength: 10
+      required:
+      - code
+      - nom
+    DepartementTree:
+      type: object
+      description: |-
+        Serializer pour l'organigramme hiérarchique.
+        GET /hr/departements/tree/
+        Récursif — retourne les sous-départements imbriqués.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nom:
+          type: string
+          description: Nom du département
+          maxLength: 100
+        code:
+          type: string
+          description: Code unique du département dans le tenant
+          maxLength: 50
+        nb_employes:
+          type: string
+          readOnly: true
+        sous_departements:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - id
+      - nb_employes
+      - nom
+      - sous_departements
+    Employe:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/employes/
+        GET /hr/employes/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee_number:
+          type: string
+          readOnly: true
+          description: Matricule unique dans le tenant — auto-généré
+        first_name:
+          type: string
+          description: Prénom
+          maxLength: 100
+        last_name:
+          type: string
+          description: Nom de famille
+          maxLength: 100
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date de naissance
+        gender:
+          allOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          description: |-
+            Genre — M/F/Other
+
+            * `M` - Masculin
+            * `F` - Féminin
+            * `Other` - Autre
+        nationality:
+          type: string
+          nullable: true
+          description: Nationalité
+          maxLength: 100
+        national_id:
+          type: string
+          nullable: true
+          description: Numéro CNI — sera chiffré en base
+          maxLength: 50
+        situation_familiale:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/SituationFamilialeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        nombre_enfants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Pour calcul allocations familiales
+        numero_cnps:
+          type: string
+          nullable: true
+          description: Numéro CNPS — Caisse Nationale Prévoyance Sociale
+          maxLength: 50
+        address:
+          type: string
+          nullable: true
+          description: Adresse complète
+        phone:
+          type: string
+          description: Téléphone professionnel
+          maxLength: 20
+        email:
+          type: string
+          format: email
+          description: Email professionnel unique dans le tenant
+          maxLength: 254
+        email_perso:
+          type: string
+          format: email
+          nullable: true
+          description: Email personnel
+          maxLength: 254
+        phone_perso:
+          type: string
+          nullable: true
+          description: Téléphone personnel
+          maxLength: 20
+        ville:
+          type: string
+          nullable: true
+          maxLength: 100
+        pays:
+          type: string
+          maxLength: 100
+        department:
+          type: string
+          readOnly: true
+        position:
+          type: string
+          readOnly: true
+        manager:
+          type: string
+          readOnly: true
+        hire_date:
+          type: string
+          format: date
+          description: Date d'embauche
+        date_fin_periode_essai:
+          type: string
+          format: date
+          nullable: true
+          description: Fin de la période d'essai
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status037Enum'
+          description: |-
+            Statut de l'employé
+
+            * `active` - Actif
+            * `inactive` - Inactif
+            * `on_leave` - En congé
+            * `terminated` - Licencié/Démissionné
+            * `suspended` - Suspendu
+        type_employe:
+          $ref: '#/components/schemas/TypeEmployeEnum'
+        salaire_base:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Salaire de base mensuel brut
+        devise:
+          type: string
+          maxLength: 10
+        mode_paiement:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ModePaiement20bEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        numero_compte:
+          type: string
+          nullable: true
+          description: Coordonnées bancaires
+          maxLength: 50
+        banque:
+          type: string
+          nullable: true
+          maxLength: 100
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de la photo de profil
+          maxLength: 200
+        cv_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du CV
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - department
+      - email
+      - employee_number
+      - first_name
+      - hire_date
+      - id
+      - last_name
+      - manager
+      - phone
+      - position
+      - updated_at
+    EmployeCreateRequest:
+      type: object
+      description: |-
+        Serializer pour créer un employé.
+        POST /hr/employes/
+
+        Validations :
+        1. Email unique dans le tenant
+        2. Département actif dans le tenant
+        3. Poste actif dans le tenant
+        4. Manager actif dans le tenant
+        5. Salaire >= SMIG Cameroun (36 270 XAF)
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          description: Prénom
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          description: Nom de famille
+          maxLength: 100
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date de naissance
+        gender:
+          allOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          description: |-
+            Genre — M/F/Other
+
+            * `M` - Masculin
+            * `F` - Féminin
+            * `Other` - Autre
+        nationality:
+          type: string
+          nullable: true
+          description: Nationalité
+          maxLength: 100
+        national_id:
+          type: string
+          nullable: true
+          description: Numéro CNI — sera chiffré en base
+          maxLength: 50
+        situation_familiale:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/SituationFamilialeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        nombre_enfants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Pour calcul allocations familiales
+        numero_cnps:
+          type: string
+          nullable: true
+          description: Numéro CNPS — Caisse Nationale Prévoyance Sociale
+          maxLength: 50
+        address:
+          type: string
+          nullable: true
+          description: Adresse complète
+        phone:
+          type: string
+          minLength: 1
+          description: Téléphone professionnel
+          maxLength: 20
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Email professionnel unique dans le tenant
+          maxLength: 254
+        email_perso:
+          type: string
+          format: email
+          nullable: true
+          description: Email personnel
+          maxLength: 254
+        phone_perso:
+          type: string
+          nullable: true
+          description: Téléphone personnel
+          maxLength: 20
+        ville:
+          type: string
+          nullable: true
+          maxLength: 100
+        pays:
+          type: string
+          minLength: 1
+          maxLength: 100
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID du département
+        position_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID du poste
+        manager_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID du manager
+        hire_date:
+          type: string
+          format: date
+          description: Date d'embauche
+        date_fin_periode_essai:
+          type: string
+          format: date
+          nullable: true
+          description: Fin de la période d'essai
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status037Enum'
+          description: |-
+            Statut de l'employé
+
+            * `active` - Actif
+            * `inactive` - Inactif
+            * `on_leave` - En congé
+            * `terminated` - Licencié/Démissionné
+            * `suspended` - Suspendu
+        type_employe:
+          $ref: '#/components/schemas/TypeEmployeEnum'
+        salaire_base:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Salaire de base mensuel brut
+        devise:
+          type: string
+          minLength: 1
+          maxLength: 10
+        mode_paiement:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ModePaiement20bEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        numero_compte:
+          type: string
+          nullable: true
+          description: Coordonnées bancaires
+          maxLength: 50
+        banque:
+          type: string
+          nullable: true
+          maxLength: 100
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de la photo de profil
+          maxLength: 200
+        cv_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du CV
+          maxLength: 200
+      required:
+      - email
+      - first_name
+      - hire_date
+      - last_name
+      - phone
+    FichePaie:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/payroll/
+        GET /hr/payroll/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee:
+          type: string
+          readOnly: true
+        contrat:
+          type: string
+          readOnly: true
+        mois:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Mois de la fiche (1-12)
+        annee:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Année de la fiche
+        period:
+          type: string
+          readOnly: true
+          description: 'Période auto-générée ex: 2024-06'
+        salaire_base:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Salaire de base mensuel
+        heures_travaillees:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          description: Heures travaillées dans le mois
+        heures_supplementaires:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          description: Heures supplémentaires effectuées
+        taux_horaire_supp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Taux majoré des heures supplémentaires
+        bonuses:
+          description: "\n                          Détail des primes en JSON.\n \
+            \                         Ex: {\n                            'prime_transport':\
+            \ 30000,\n                            'prime_logement': 50000,\n     \
+            \                       'prime_rendement': 25000,\n                  \
+            \          'autres': 0\n                          }\n                \
+            \          "
+        deductions:
+          description: "\n                          Détail des déductions en JSON.\n\
+            \                          Ex: {\n                            'cotisation_cnps':\
+            \ 44000,\n                            'impot_irpp': 35000,\n         \
+            \                   'credit_logement': 0,\n                          \
+            \  'autres': 0\n                          }\n                        \
+            \  "
+        gross:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Salaire brut = base + primes + heures supp
+        net_salary:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Salaire net = gross - total_deductions
+        currency:
+          type: string
+          maxLength: 10
+        statut:
+          $ref: '#/components/schemas/FichePaieStatutEnum'
+        date_validation:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Date de validation par RH/Comptable
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Date de paiement effectif
+        mode_paiement:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ModePaiement20bEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        pdf_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du bulletin de paie PDF généré
+          maxLength: 200
+        journal_entry_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: UUID de l'écriture SYSCOHADA dans le service Comptabilité
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - annee
+      - contrat
+      - created_at
+      - date_validation
+      - employee
+      - gross
+      - id
+      - journal_entry_id
+      - mois
+      - net_salary
+      - paid_at
+      - period
+      - salaire_base
+      - updated_at
+    FichePaieCreateRequest:
+      type: object
+      description: |-
+        Serializer pour générer une fiche de paie.
+        POST /hr/payroll/
+        PUT  /hr/payroll/{id}/
+      properties:
+        employe_id:
+          type: string
+          format: uuid
+          description: UUID de l'employé
+        contrat_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID du contrat
+        mois:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Mois de la fiche (1-12)
+        annee:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Année de la fiche
+        heures_travaillees:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          description: Heures travaillées dans le mois
+        heures_supplementaires:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          description: Heures supplémentaires effectuées
+        taux_horaire_supp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Taux majoré des heures supplémentaires
+        bonuses:
+          description: "\n                          Détail des primes en JSON.\n \
+            \                         Ex: {\n                            'prime_transport':\
+            \ 30000,\n                            'prime_logement': 50000,\n     \
+            \                       'prime_rendement': 25000,\n                  \
+            \          'autres': 0\n                          }\n                \
+            \          "
+        deductions:
+          description: "\n                          Détail des déductions en JSON.\n\
+            \                          Ex: {\n                            'cotisation_cnps':\
+            \ 44000,\n                            'impot_irpp': 35000,\n         \
+            \                   'credit_logement': 0,\n                          \
+            \  'autres': 0\n                          }\n                        \
+            \  "
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 10
+      required:
+      - annee
+      - employe_id
+      - mois
+    FichePaiePayerModePaiementEnum:
+      enum:
+      - virement
+      - especes
+      - mobile_money
+      - cheque
+      type: string
+      description: |-
+        * `virement` - virement
+        * `especes` - especes
+        * `mobile_money` - mobile_money
+        * `cheque` - cheque
+    FichePaiePayerRequest:
+      type: object
+      description: |-
+        Serializer pour marquer une fiche comme payée.
+        POST /hr/payroll/{id}/payer/
+      properties:
+        mode_paiement:
+          allOf:
+          - $ref: '#/components/schemas/FichePaiePayerModePaiementEnum'
+          description: |-
+            Mode de paiement utilisé
+
+            * `virement` - virement
+            * `especes` - especes
+            * `mobile_money` - mobile_money
+            * `cheque` - cheque
+      required:
+      - mode_paiement
+    FichePaieStatutEnum:
+      enum:
+      - brouillon
+      - valide
+      - paye
+      type: string
+      description: |-
+        * `brouillon` - Brouillon
+        * `valide` - Validé
+        * `paye` - Payé
+    GenderEnum:
+      enum:
+      - M
+      - F
+      - Other
+      type: string
+      description: |-
+        * `M` - Masculin
+        * `F` - Féminin
+        * `Other` - Autre
+    ModePaiement20bEnum:
+      enum:
+      - virement
+      - especes
+      - mobile_money
+      - cheque
+      type: string
+      description: |-
+        * `virement` - Virement bancaire
+        * `especes` - Espèces
+        * `mobile_money` - Mobile Money
+        * `cheque` - Chèque
+    NiveauEnum:
+      enum:
+      - junior
+      - mid
+      - senior
+      - manager
+      - directeur
+      type: string
+      description: |-
+        * `junior` - Junior
+        * `mid` - Mid-level
+        * `senior` - Senior
+        * `manager` - Manager
+        * `directeur` - Directeur
+    NullEnum:
+      enum:
+      - null
+    PatchedEmployeUpdateRequest:
+      type: object
+      description: |-
+        Serializer pour modifier un employé.
+        PATCH /hr/employes/{id}/
+        Tous les champs sont optionnels.
+
+        Validations :
+        1. Salaire >= SMIG si modifié
+        2. Département actif si modifié
+        3. Poste cohérent avec département
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          description: Prénom
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          description: Nom de famille
+          maxLength: 100
+        situation_familiale:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/SituationFamilialeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        nombre_enfants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Pour calcul allocations familiales
+        phone:
+          type: string
+          minLength: 1
+          description: Téléphone professionnel
+          maxLength: 20
+        phone_perso:
+          type: string
+          nullable: true
+          description: Téléphone personnel
+          maxLength: 20
+        address:
+          type: string
+          nullable: true
+          description: Adresse complète
+        ville:
+          type: string
+          nullable: true
+          maxLength: 100
+        email_perso:
+          type: string
+          format: email
+          nullable: true
+          description: Email personnel
+          maxLength: 254
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        position_id:
+          type: string
+          format: uuid
+          nullable: true
+        manager_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status037Enum'
+          description: |-
+            Statut de l'employé
+
+            * `active` - Actif
+            * `inactive` - Inactif
+            * `on_leave` - En congé
+            * `terminated` - Licencié/Démissionné
+            * `suspended` - Suspendu
+        salaire_base:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          description: Salaire de base mensuel brut
+        mode_paiement:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ModePaiement20bEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        numero_compte:
+          type: string
+          nullable: true
+          description: Coordonnées bancaires
+          maxLength: 50
+        banque:
+          type: string
+          nullable: true
+          maxLength: 100
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL de la photo de profil
+          maxLength: 200
+        cv_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du CV
+          maxLength: 200
+    PayrollRunRequest:
+      type: object
+      description: |-
+        Serializer pour lancer la génération de paie en masse.
+        POST /hr/payroll/run/
+      properties:
+        mois:
+          type: integer
+          maximum: 12
+          minimum: 1
+          description: Mois de la paie (1-12)
+        annee:
+          type: integer
+          description: Année de la paie
+      required:
+      - annee
+      - mois
+    PeriodicitePaieEnum:
+      enum:
+      - mensuel
+      - bimensuel
+      - hebdomadaire
+      type: string
+      description: |-
+        * `mensuel` - Mensuel
+        * `bimensuel` - Bimensuel
+        * `hebdomadaire` - Hebdomadaire
+    Poste:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/postes/
+        GET /hr/postes/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        departement:
+          type: string
+          readOnly: true
+        titre:
+          type: string
+          description: Intitulé du poste
+          maxLength: 100
+        code:
+          type: string
+          description: Code unique du poste dans le tenant
+          maxLength: 50
+        description:
+          type: string
+          nullable: true
+          description: Description des responsabilités du poste
+        niveau:
+          allOf:
+          - $ref: '#/components/schemas/NiveauEnum'
+          description: |-
+            Niveau hiérarchique du poste
+
+            * `junior` - Junior
+            * `mid` - Mid-level
+            * `senior` - Senior
+            * `manager` - Manager
+            * `directeur` - Directeur
+        salaire_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          nullable: true
+          description: Salaire minimum pour ce poste
+        salaire_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          nullable: true
+          description: Salaire maximum pour ce poste
+        devise:
+          type: string
+          description: Devise de la grille salariale
+          maxLength: 10
+        nb_employes:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          description: False = poste archivé
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - departement
+      - id
+      - nb_employes
+      - titre
+      - updated_at
+    PosteCreateRequest:
+      type: object
+      description: |-
+        Serializer pour créer/modifier un poste.
+        POST /hr/postes/
+        PUT  /hr/postes/{id}/
+      properties:
+        titre:
+          type: string
+          minLength: 1
+          description: Intitulé du poste
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          description: Code unique du poste dans le tenant
+          maxLength: 50
+        departement_id:
+          type: string
+          format: uuid
+          description: UUID du département
+        description:
+          type: string
+          nullable: true
+          description: Description des responsabilités du poste
+        niveau:
+          allOf:
+          - $ref: '#/components/schemas/NiveauEnum'
+          description: |-
+            Niveau hiérarchique du poste
+
+            * `junior` - Junior
+            * `mid` - Mid-level
+            * `senior` - Senior
+            * `manager` - Manager
+            * `directeur` - Directeur
+        salaire_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          nullable: true
+          description: Salaire minimum pour ce poste
+        salaire_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,13}(?:\.\d{0,2})?$
+          nullable: true
+          description: Salaire maximum pour ce poste
+        devise:
+          type: string
+          minLength: 1
+          description: Devise de la grille salariale
+          maxLength: 10
+      required:
+      - code
+      - departement_id
+      - titre
+    Presence:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/presences/
+        GET /hr/presences/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee:
+          type: string
+          readOnly: true
+        date:
+          type: string
+          format: date
+          description: Date du pointage
+        heure_arrivee:
+          type: string
+          format: time
+          nullable: true
+          description: Heure d'arrivée
+        heure_depart:
+          type: string
+          format: time
+          nullable: true
+          description: Heure de départ
+        heures_travaillees:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          description: Calculé depuis heure_arrivee et heure_depart
+        heures_supplementaires:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Heures supplémentaires
+        statut:
+          $ref: '#/components/schemas/Statut85aEnum'
+        commentaire:
+          type: string
+          nullable: true
+          description: Commentaire optionnel
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - date
+      - employee
+      - heures_travaillees
+      - id
+      - updated_at
+    PresenceCreateRequest:
+      type: object
+      description: |-
+        Serializer pour créer/modifier une présence.
+        POST /hr/presences/
+        PUT  /hr/presences/{id}/
+
+        Validations :
+        1. Employé existe dans le tenant
+        2. heure_depart après heure_arrivee
+        3. Un seul pointage par employé par jour
+        4. Employé non en congé approuvé ce jour
+      properties:
+        employe_id:
+          type: string
+          format: uuid
+          description: UUID de l'employé
+        date:
+          type: string
+          format: date
+          description: Date du pointage
+        heure_arrivee:
+          type: string
+          format: time
+          nullable: true
+          description: Heure d'arrivée
+        heure_depart:
+          type: string
+          format: time
+          nullable: true
+          description: Heure de départ
+        heures_supplementaires:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Heures supplémentaires
+        statut:
+          $ref: '#/components/schemas/Statut85aEnum'
+        commentaire:
+          type: string
+          nullable: true
+          description: Commentaire optionnel
+      required:
+      - date
+      - employe_id
+    RejeterDemandeRequest:
+      type: object
+      description: Payload du rejet d'une demande par le RH.
+      properties:
+        motif_rejet:
+          type: string
+          minLength: 5
+          description: Motif du rejet — obligatoire pour informer l'employé
+          maxLength: 500
+      required:
+      - motif_rejet
+    SituationFamilialeEnum:
+      enum:
+      - celibataire
+      - marie
+      - divorce
+      - veuf
+      type: string
+      description: |-
+        * `celibataire` - Célibataire
+        * `marie` - Marié(e)
+        * `divorce` - Divorcé(e)
+        * `veuf` - Veuf/Veuve
+    SoldeConges:
+      type: object
+      description: |-
+        Serializer complet pour liste et détail.
+        GET /hr/soldes-conges/
+        GET /hr/soldes-conges/{id}/
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee:
+          type: string
+          readOnly: true
+        type_conge:
+          allOf:
+          - $ref: '#/components/schemas/SoldeCongesTypeCongeEnum'
+          description: |-
+            Type de congé
+
+            * `annuel` - Congé annuel
+            * `maladie` - Congé maladie
+            * `sans_solde` - Congé sans solde
+            * `exceptionnel` - Congé exceptionnel
+        annee:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Année de référence du solde
+        jours_acquis:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          description: Total des jours acquis dans l'année
+        jours_pris:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          description: Total des jours pris dans l'année
+        jours_restants:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - annee
+      - created_at
+      - employee
+      - id
+      - jours_restants
+      - type_conge
+      - updated_at
+    SoldeCongesTypeCongeEnum:
+      enum:
+      - annuel
+      - maladie
+      - sans_solde
+      - exceptionnel
+      type: string
+      description: |-
+        * `annuel` - Congé annuel
+        * `maladie` - Congé maladie
+        * `sans_solde` - Congé sans solde
+        * `exceptionnel` - Congé exceptionnel
+    Status037Enum:
+      enum:
+      - active
+      - inactive
+      - on_leave
+      - terminated
+      - suspended
+      type: string
+      description: |-
+        * `active` - Actif
+        * `inactive` - Inactif
+        * `on_leave` - En congé
+        * `terminated` - Licencié/Démissionné
+        * `suspended` - Suspendu
+    Statut85aEnum:
+      enum:
+      - present
+      - absent
+      - retard
+      - conge
+      - ferie
+      type: string
+      description: |-
+        * `present` - Présent
+        * `absent` - Absent
+        * `retard` - Retard
+        * `conge` - En congé
+        * `ferie` - Jour férié
+    TypeCongeD98Enum:
+      enum:
+      - annuel
+      - maladie
+      - maternite
+      - paternite
+      - sans_solde
+      - exceptionnel
+      - recuperation
+      - formation
+      - deces
+      type: string
+      description: |-
+        * `annuel` - Congé annuel
+        * `maladie` - Congé maladie
+        * `maternite` - Congé maternité
+        * `paternite` - Congé paternité
+        * `sans_solde` - Congé sans solde
+        * `exceptionnel` - Congé exceptionnel
+        * `recuperation` - Récupération
+        * `formation` - Formation
+        * `deces` - Décès famille
+    TypeDocumentEnum:
+      enum:
+      - attestation_travail
+      - attestation_salaire
+      - bulletin_paie_copie
+      type: string
+      description: |-
+        * `attestation_travail` - Attestation de travail
+        * `attestation_salaire` - Attestation de salaire
+        * `bulletin_paie_copie` - Copie de bulletin de paie
+    TypeEmployeEnum:
+      enum:
+      - permanent
+      - contractuel
+      - stagiaire
+      - consultant
+      type: string
+      description: |-
+        * `permanent` - Permanent
+        * `contractuel` - Contractuel
+        * `stagiaire` - Stagiaire
+        * `consultant` - Consultant
+    TypeEnum:
+      enum:
+      - CDI
+      - CDD
+      - Interim
+      - Stage
+      - Freelance
+      type: string
+      description: |-
+        * `CDI` - Contrat à Durée Indéterminée
+        * `CDD` - Contrat à Durée Déterminée
+        * `Interim` - Intérim
+        * `Stage` - Stage
+        * `Freelance` - Freelance
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenu via POST /api/v1/auth/login/

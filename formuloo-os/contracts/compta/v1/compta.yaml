@@ -1,0 +1,512 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — COMPTA SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : COMPTA Service
+# Version     : 1.0.0
+# Auteur      : CHOWUINOU TEGUIA
+# Date        : 2024-2025
+# Description : Contrat OpenAPI du service COMPTA.
+#               Toutes les données sont isolées par tenant_id.
+#               Chaque endpoint requiert un JWT valide (Bearer Token).
+#               Validé par Schemathesis dans le pipeline CI/CD GitLab.
+# Dépôt       : gitlab.formuloo.com/formuloo-contracts/formuloo-os
+# ============================================================
+
+openapi: 3.0.0
+info:
+  title: Formuloo OS — Compta Service API
+  version: 1.0.0
+  description: >
+    Service de comptabilité de Formuloo OS.
+    Gère les factures, paiements, bilans financiers et la multi-devise.
+
+servers:
+  - url: http://localhost:8002/api/v1
+    description: Serveur de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Factures
+    description: Gestion des factures
+  - name: Paiements
+    description: Gestion des paiements
+  - name: Bilans
+    description: Bilans et rapports financiers
+
+paths:
+
+  /compta/factures/:
+    get:
+      tags: [Factures]
+      summary: Lister les factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [BROUILLON, EMISE, PAYEE, ANNULEE]
+        - name: date_debut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Liste des factures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFactures'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Factures]
+      summary: Créer une facture
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactureCreate'
+            example:
+              client_nom: "PME Beta SARL"
+              client_email: "contact@pme-beta.com"
+              lignes:
+                - description: "Développement API REST"
+                  quantite: 1
+                  prix_unitaire: 500000
+              devise: XAF
+              date_echeance: "2024-07-31"
+      responses:
+        '201':
+          description: Facture créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /compta/factures/{id}/:
+    get:
+      tags: [Factures]
+      summary: Détail d'une facture
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Facture trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Factures]
+      summary: Modifier une facture
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactureUpdate'
+      responses:
+        '200':
+          description: Facture modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Factures]
+      summary: Annuler une facture
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Facture annulée
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/paiements/:
+    get:
+      tags: [Paiements]
+      summary: Lister les paiements
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: facture_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Liste des paiements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaiements'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Paiements]
+      summary: Enregistrer un paiement
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaiementCreate'
+      responses:
+        '201':
+          description: Paiement enregistré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paiement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/bilans/:
+    get:
+      tags: [Bilans]
+      summary: Bilan financier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: annee
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2024
+        - name: devise
+          in: query
+          schema:
+            type: string
+            enum: [XAF, EUR, USD]
+            default: XAF
+      responses:
+        '200':
+          description: Bilan financier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bilan'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 20
+
+  schemas:
+
+    LigneFacture:
+      type: object
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        quantite:
+          type: number
+        prix_unitaire:
+          type: number
+        montant_total:
+          type: number
+
+    Facture:
+      type: object
+      properties:
+        id:
+          type: integer
+        numero:
+          type: string
+          example: "FAC-2024-001"
+        client_nom:
+          type: string
+        client_email:
+          type: string
+          format: email
+        lignes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneFacture'
+        montant_ht:
+          type: number
+        tva:
+          type: number
+        montant_ttc:
+          type: number
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+        statut:
+          type: string
+          enum: [BROUILLON, EMISE, PAYEE, ANNULEE]
+        date_emission:
+          type: string
+          format: date
+        date_echeance:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+
+    FactureCreate:
+      type: object
+      required: [client_nom, lignes, devise, date_echeance]
+      properties:
+        client_nom:
+          type: string
+        client_email:
+          type: string
+          format: email
+        lignes:
+          type: array
+          items:
+            type: object
+            required: [description, quantite, prix_unitaire]
+            properties:
+              description:
+                type: string
+              quantite:
+                type: number
+              prix_unitaire:
+                type: number
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+        date_echeance:
+          type: string
+          format: date
+
+    FactureUpdate:
+      type: object
+      properties:
+        client_nom:
+          type: string
+        client_email:
+          type: string
+        statut:
+          type: string
+          enum: [BROUILLON, EMISE, ANNULEE]
+        date_echeance:
+          type: string
+          format: date
+
+    PaginatedFactures:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Facture'
+
+    Paiement:
+      type: object
+      properties:
+        id:
+          type: integer
+        facture_id:
+          type: integer
+        montant:
+          type: number
+        devise:
+          type: string
+        mode_paiement:
+          type: string
+          enum: [VIREMENT, CHEQUE, ESPECES, MOBILE_MONEY]
+        date_paiement:
+          type: string
+          format: date
+        reference:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    PaiementCreate:
+      type: object
+      required: [facture_id, montant, mode_paiement, date_paiement]
+      properties:
+        facture_id:
+          type: integer
+        montant:
+          type: number
+        mode_paiement:
+          type: string
+          enum: [VIREMENT, CHEQUE, ESPECES, MOBILE_MONEY]
+        date_paiement:
+          type: string
+          format: date
+        reference:
+          type: string
+
+    PaginatedPaiements:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Paiement'
+
+    Bilan:
+      type: object
+      properties:
+        annee:
+          type: integer
+        devise:
+          type: string
+        total_factures:
+          type: integer
+        total_encaisse:
+          type: number
+        total_impaye:
+          type: number
+        chiffre_affaires:
+          type: number
+        mensuel:
+          type: array
+          items:
+            type: object
+            properties:
+              mois:
+                type: string
+              encaisse:
+                type: number
+              facture:
+                type: number
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token JWT absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

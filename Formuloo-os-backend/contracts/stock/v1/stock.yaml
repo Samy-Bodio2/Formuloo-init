@@ -1,0 +1,529 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — STOCK SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : STOCK Service
+# Version     : 1.0.0
+# Auteur      : CHOWUINOU TEGUIA
+# Date        : 2024-2025
+# Description : Contrat OpenAPI du service STOCK.
+#               Toutes les données sont isolées par tenant_id.
+#               Chaque endpoint requiert un JWT valide (Bearer Token).
+#               Validé par Schemathesis dans le pipeline CI/CD GitLab.
+# Dépôt       : gitlab.formuloo.com/formuloo-contracts/formuloo-os
+# ============================================================
+
+openapi: 3.0.0
+info:
+  title: Formuloo OS — Stock Service API
+  version: 1.0.0
+  description: >
+    Service de gestion des stocks de Formuloo OS.
+    Gère les produits, inventaire, fournisseurs et mouvements de stock.
+
+servers:
+  - url: http://localhost:8004/api/v1
+    description: Serveur de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Produits
+    description: Gestion des produits
+  - name: Mouvements
+    description: Entrées et sorties de stock
+  - name: Fournisseurs
+    description: Gestion des fournisseurs
+
+paths:
+
+  /stock/produits/:
+    get:
+      tags: [Produits]
+      summary: Lister les produits
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: categorie
+          in: query
+          schema:
+            type: string
+        - name: stock_faible
+          in: query
+          description: Filtrer les produits en stock faible
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Liste des produits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProduits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Produits]
+      summary: Créer un produit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProduitCreate'
+            example:
+              nom: "Ordinateur portable HP"
+              reference: "HP-LAPTOP-001"
+              categorie: "Informatique"
+              prix_achat: 350000
+              prix_vente: 450000
+              quantite_stock: 10
+              seuil_alerte: 3
+              devise: XAF
+      responses:
+        '201':
+          description: Produit créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Produit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /stock/produits/{id}/:
+    get:
+      tags: [Produits]
+      summary: Détail d'un produit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Produit trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Produit'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Produits]
+      summary: Modifier un produit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProduitUpdate'
+      responses:
+        '200':
+          description: Produit modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Produit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Produits]
+      summary: Supprimer un produit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Produit supprimé
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /stock/mouvements/:
+    get:
+      tags: [Mouvements]
+      summary: Lister les mouvements de stock
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: produit_id
+          in: query
+          schema:
+            type: integer
+        - name: type_mouvement
+          in: query
+          schema:
+            type: string
+            enum: [ENTREE, SORTIE, AJUSTEMENT]
+        - name: date_debut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Liste des mouvements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMouvements'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Mouvements]
+      summary: Enregistrer un mouvement de stock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MouvementCreate'
+      responses:
+        '201':
+          description: Mouvement enregistré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mouvement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /stock/fournisseurs/:
+    get:
+      tags: [Fournisseurs]
+      summary: Lister les fournisseurs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Liste des fournisseurs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFournisseurs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Fournisseurs]
+      summary: Créer un fournisseur
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FournisseurCreate'
+      responses:
+        '201':
+          description: Fournisseur créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fournisseur'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 20
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+
+  schemas:
+
+    Produit:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        reference:
+          type: string
+        categorie:
+          type: string
+        prix_achat:
+          type: number
+        prix_vente:
+          type: number
+        quantite_stock:
+          type: integer
+        seuil_alerte:
+          type: integer
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+        is_stock_faible:
+          type: boolean
+        fournisseur:
+          $ref: '#/components/schemas/Fournisseur'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProduitCreate:
+      type: object
+      required: [nom, reference, prix_achat, prix_vente, quantite_stock]
+      properties:
+        nom:
+          type: string
+        reference:
+          type: string
+        categorie:
+          type: string
+        prix_achat:
+          type: number
+        prix_vente:
+          type: number
+        quantite_stock:
+          type: integer
+        seuil_alerte:
+          type: integer
+          default: 5
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+        fournisseur_id:
+          type: integer
+
+    ProduitUpdate:
+      type: object
+      properties:
+        nom:
+          type: string
+        prix_vente:
+          type: number
+        seuil_alerte:
+          type: integer
+        categorie:
+          type: string
+
+    PaginatedProduits:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Produit'
+
+    Mouvement:
+      type: object
+      properties:
+        id:
+          type: integer
+        produit:
+          $ref: '#/components/schemas/Produit'
+        type_mouvement:
+          type: string
+          enum: [ENTREE, SORTIE, AJUSTEMENT]
+        quantite:
+          type: integer
+        quantite_avant:
+          type: integer
+        quantite_apres:
+          type: integer
+        motif:
+          type: string
+        date_mouvement:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    MouvementCreate:
+      type: object
+      required: [produit_id, type_mouvement, quantite]
+      properties:
+        produit_id:
+          type: integer
+        type_mouvement:
+          type: string
+          enum: [ENTREE, SORTIE, AJUSTEMENT]
+        quantite:
+          type: integer
+        motif:
+          type: string
+
+    PaginatedMouvements:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mouvement'
+
+    Fournisseur:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        email:
+          type: string
+          format: email
+        telephone:
+          type: string
+        adresse:
+          type: string
+        pays:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    FournisseurCreate:
+      type: object
+      required: [nom, email]
+      properties:
+        nom:
+          type: string
+        email:
+          type: string
+          format: email
+        telephone:
+          type: string
+        adresse:
+          type: string
+        pays:
+          type: string
+
+    PaginatedFournisseurs:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fournisseur'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token JWT absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

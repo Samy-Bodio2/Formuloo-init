@@ -1,0 +1,100 @@
+# ============================================================================
+# Formuloo OS — Version Catalog
+#
+# Matrice de compatibilite validee (ticket FOR16A26-985) :
+#   Gradle (wrapper)        : 9.1.0   -> fige, ne pas changer
+#   Android Gradle Plugin   : 9.0.1   -> seule version dont Gradle min/default = 9.1.0
+#                                        (AGP 9.1.x exige Gradle >= 9.3.1, incompatible)
+#   Kotlin                  : 2.4.0   -> derniere stable (06/2026) ; combinaison
+#                                        deja validee par le wizard JetBrains avec
+#                                        Compose Multiplatform 1.11.1
+#   Compose Multiplatform   : 1.11.1  -> derniere stable ; exige Kotlin >= 2.1.0
+#   compileSdk / targetSdk  : 36      -> AGP 9.0.1 supporte jusqu'a API 36.1
+#   minSdk                  : 26      -> cible ERP (Android 8.0 Oreo+)
+#
+# Points de vigilance (a re-verifier si upgrade futur) :
+#   - Kotlin 2.4.0 depasse la plage "testee" par Gradle 9.1.0 (2.0.0-2.3.20) pour son
+#     Kotlin DSL embarque, mais le KGP 2.4.0 est forward-compatible (combinaison deja
+#     presente dans le projet scaffolde par le wizard).
+#   - androidx-lifecycle reste en pre-version (2.11.0-beta01), seule version
+#     multiplatform resolue sans conflit avec Compose Multiplatform 1.11.1 au
+#     moment de la redaction.
+# ============================================================================
+
+[versions]
+agp = "9.0.1"
+kotlin = "2.4.0"
+compose-multiplatform = "1.11.1"
+koin = "4.1.1"
+ktor = "3.4.0"
+sqldelight = "2.3.2"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.11.0"
+androidx-lifecycle = "2.11.0-beta01"
+androidx-activity = "1.10.1"
+navigation-compose = "2.9.2"
+multiplatform-settings = "1.3.0"
+
+android-compileSdk = "36"
+android-minSdk = "26"
+android-targetSdk = "36"
+
+[libraries]
+# Compose Multiplatform
+compose-multiplatform-bom = { module = "org.jetbrains.compose:compose-bom", version.ref = "compose-multiplatform" }
+
+# Coroutines / Serialization
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+# Ktor
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
+ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
+
+# SQLDelight
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+sqldelight-native = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-jvm = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+
+# Koin
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
+koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
+koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
+
+# Multiplatform Settings (stockage cle/valeur securise expect/actual)
+multiplatform-settings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatform-settings" }
+multiplatform-settings-no-arg = { module = "com.russhwolf:multiplatform-settings-no-arg", version.ref = "multiplatform-settings" }
+
+# Lifecycle / Navigation (Compose Multiplatform)
+androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
+navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
+
+# --- Classpath des plugins, utilise uniquement par build-logic/convention ---
+android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlin-serialization-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
+compose-gradlePlugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "compose-multiplatform" }
+compose-compiler-gradlePlugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }

@@ -1,0 +1,2848 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — HR SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : HR Service (Ressources Humaines)
+# Version     : 2.1.0
+# Auteur      : CHOWUINOU TEGUIA
+# Date        : 2024-2025
+# Description : Contrat complet et final du service RH.
+#               Conforme au CDC Formuloo OS v1.0.
+#               Gère les employés, postes, départements,
+#               contrats, congés, présences et fiches de paie.
+#               Toutes les données sont isolées par tenant_id.
+#
+# HISTORIQUE DES VERSIONS :
+# v1.0.0 — Version initiale (endpoints de base)
+# v2.0.0 — Version complète (UUIDs, schémas complets)
+# v2.1.0 — Mise à jour CDC :
+#           + Department.parent (sous-départements)
+#           + GET /hr/departements/tree/ (organigramme)
+#           + POST /hr/paies/run/ (génération masse)
+#           + GET /hr/paies/periode/{periode}/
+#           + Employee.genre → ajout Autre
+#           + Employee.statut → ajout en_conge
+#           + Contract.signed_at
+#           + Contract.is_active
+# ============================================================
+
+openapi: "3.0.0"
+
+# ------------------------------------------------------------
+# INFORMATIONS GÉNÉRALES
+# ------------------------------------------------------------
+info:
+  title: Formuloo OS — HR Service API
+  version: 2.1.0
+  description: >
+    Service de gestion des Ressources Humaines de Formuloo OS.
+    Gère les employés, postes, départements, contrats, congés,
+    présences et fiches de paie SYSCOHADA.
+    Toutes les données sont filtrées automatiquement par tenant_id
+    pour garantir l'isolation multi-tenant entre les PME africaines.
+    Conforme aux normes SYSCOHADA et aux réalités des PME africaines
+    (gestion en XAF, CNPS, IRPP).
+    Conforme au CDC Formuloo OS v1.0.
+  contact:
+    name: CHOWUINOU TEGUIA — Backend Developer
+    email: backend@formuloo.com
+
+# ------------------------------------------------------------
+# SERVEURS
+# Le service HR tourne sur le port 8001 en développement local
+# ------------------------------------------------------------
+servers:
+  - url: http://localhost:8001/api/v1
+    description: Serveur local de développement (port 8001)
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+# ------------------------------------------------------------
+# TAGS — Regroupement logique des endpoints par domaine métier
+# ------------------------------------------------------------
+tags:
+  - name: Departements
+    description: Gestion des départements et de l'organigramme hiérarchique
+  - name: Postes
+    description: Gestion des postes et niveaux hiérarchiques
+  - name: Employes
+    description: CRUD complet des employés du tenant
+  - name: Contrats
+    description: Gestion des contrats de travail
+  - name: Conges
+    description: Gestion des demandes et approbations de congés
+  - name: SoldesConges
+    description: Suivi des soldes de congés par employé
+  - name: Presences
+    description: Gestion des pointages et présences
+  - name: Paies
+    description: Génération et consultation des fiches de paie SYSCOHADA
+
+# ============================================================
+# ENDPOINTS (PATHS)
+# Convention : /api/v1/hr/{ressource}/
+# Toutes les ressources sont filtrées par tenant_id (JWT)
+# ============================================================
+paths:
+
+  # ==========================================================
+  # DÉPARTEMENTS
+  # Représente la structure organisationnelle de la PME
+  # Supporte les sous-départements (parent/enfant)
+  # ==========================================================
+
+  /hr/departements/:
+    get:
+      tags: [Departements]
+      summary: Lister les départements
+      description: >
+        Retourne la liste paginée de tous les départements du tenant courant.
+        Inclut le nombre d'employés actifs dans chaque département.
+        Filtrable par statut actif/inactif.
+        Accessible à tous les rôles authentifiés.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: is_active
+          in: query
+          required: false
+          description: Filtrer par statut actif/inactif
+          schema:
+            type: boolean
+        - name: parent_id
+          in: query
+          required: false
+          description: Filtrer par département parent (UUID) — null = racine
+          schema:
+            type: string
+            format: uuid
+            nullable: true
+      responses:
+        '200':
+          description: Liste paginée des départements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDepartements'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Departements]
+      summary: Créer un département
+      description: >
+        Crée un nouveau département dans l'organigramme du tenant.
+        Peut être rattaché à un département parent pour créer
+        une hiérarchie (ex: Informatique > Frontend > Mobile).
+        Le tenant_id est extrait automatiquement du JWT.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartementCreate'
+            example:
+              nom: Informatique
+              code: INFO
+              description: Département développement logiciel
+              parent_id: null
+              budget: 5000000
+              devise: XAF
+      responses:
+        '201':
+          description: Département créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Departement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/departements/tree/:
+    get:
+      tags: [Departements]
+      summary: Organigramme hiérarchique des départements
+      description: >
+        Retourne l'arbre complet des départements du tenant
+        sous forme hiérarchique (parent → enfants → petits-enfants).
+        Utile pour afficher l'organigramme de la PME.
+        Accessible à tous les rôles authentifiés.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Arbre hiérarchique des départements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DepartementTree'
+              example:
+                - id: uuid-info
+                  nom: Informatique
+                  code: INFO
+                  nb_employes: 10
+                  sous_departements:
+                    - id: uuid-frontend
+                      nom: Frontend
+                      code: INFO-FRONT
+                      nb_employes: 4
+                      sous_departements: []
+                    - id: uuid-backend
+                      nom: Backend
+                      code: INFO-BACK
+                      nb_employes: 6
+                      sous_departements: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /hr/departements/{id}/:
+    get:
+      tags: [Departements]
+      summary: Détail d'un département
+      description: >
+        Retourne les informations complètes d'un département
+        incluant le responsable, le parent et le nombre d'employés.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Département trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Departement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Departements]
+      summary: Modifier un département
+      description: >
+        Met à jour les informations d'un département.
+        Seuls les champs fournis sont modifiés.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartementCreate'
+      responses:
+        '200':
+          description: Département modifié avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Departement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Departements]
+      summary: Supprimer un département
+      description: >
+        Désactive un département (soft delete).
+        Impossible si des employés actifs y sont rattachés
+        ou si des sous-départements actifs existent.
+        Réservé au rôle ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Département désactivé
+        '400':
+          description: Département contient des employés actifs ou des sous-départements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # POSTES
+  # Représente les postes disponibles dans l'organigramme
+  # ==========================================================
+
+  /hr/postes/:
+    get:
+      tags: [Postes]
+      summary: Lister les postes
+      description: >
+        Retourne la liste de tous les postes disponibles dans le tenant.
+        Filtrable par département et niveau hiérarchique.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: departement_id
+          in: query
+          required: false
+          description: Filtrer par département (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: niveau
+          in: query
+          required: false
+          description: Filtrer par niveau hiérarchique
+          schema:
+            type: string
+            enum: [junior, mid, senior, manager, directeur]
+        - name: is_active
+          in: query
+          required: false
+          description: Filtrer par statut actif/inactif
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Liste des postes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPostes'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Postes]
+      summary: Créer un poste
+      description: >
+        Crée un nouveau poste dans le tenant courant.
+        Définit la grille salariale (min/max) et le niveau.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PosteCreate'
+            example:
+              titre: Développeur Backend Senior
+              code: DEV-BACK-SR
+              departement_id: uuid-departement
+              niveau: senior
+              salaire_min: 400000
+              salaire_max: 800000
+              devise: XAF
+      responses:
+        '201':
+          description: Poste créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poste'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/postes/{id}/:
+    get:
+      tags: [Postes]
+      summary: Détail d'un poste
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Poste trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poste'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Postes]
+      summary: Modifier un poste
+      description: >
+        Met à jour les informations d'un poste.
+        Seuls les champs fournis sont modifiés.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PosteCreate'
+      responses:
+        '200':
+          description: Poste modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poste'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Postes]
+      summary: Supprimer un poste
+      description: >
+        Désactive un poste (soft delete).
+        Impossible si des employés actifs occupent ce poste.
+        Réservé au rôle ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Poste désactivé
+        '400':
+          description: Des employés actifs occupent ce poste
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # EMPLOYÉS
+  # Entité centrale du module RH
+  # Toutes les autres entités y sont rattachées
+  # ==========================================================
+
+  /hr/employes/:
+    get:
+      tags: [Employes]
+      summary: Lister les employés du tenant
+      description: >
+        Retourne la liste paginée des employés appartenant au tenant
+        de l'utilisateur connecté. Le filtrage par tenant_id est
+        automatique via le middleware Django.
+        Supporte la recherche full-text sur nom, prénom, email, matricule.
+        Accessible aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: departement_id
+          in: query
+          required: false
+          description: Filtrer par département (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: poste_id
+          in: query
+          required: false
+          description: Filtrer par poste (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: statut
+          in: query
+          required: false
+          description: Filtrer par statut de l'employé
+          schema:
+            type: string
+            enum: [actif, inactif, en_conge, suspendu, demissionne, licencie]
+        - name: type_employe
+          in: query
+          required: false
+          description: Filtrer par type d'employé
+          schema:
+            type: string
+            enum: [permanent, contractuel, stagiaire, consultant]
+        - name: manager_id
+          in: query
+          required: false
+          description: Filtrer par manager direct (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: date_embauche_min
+          in: query
+          required: false
+          description: Date d'embauche minimale (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: date_embauche_max
+          in: query
+          required: false
+          description: Date d'embauche maximale (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Liste paginée des employés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEmployes'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Employes]
+      summary: Créer un nouvel employé
+      description: >
+        Crée un nouveau profil employé dans le tenant courant.
+        Le tenant_id est automatiquement assigné depuis le JWT.
+        Un matricule unique est auto-généré (ex: EMP-2024-001).
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeCreate'
+            example:
+              first_name: Jean
+              last_name: Dupont
+              birth_date: "1990-05-15"
+              gender: M
+              nationality: Camerounaise
+              national_id: "123456789"
+              address: Rue de la Paix, Akwa
+              phone: "+237699000000"
+              email: jean.dupont@pme-alpha.com
+              department_id: uuid-departement
+              position_id: uuid-poste
+              manager_id: uuid-manager
+              hire_date: "2024-01-15"
+              status: actif
+      responses:
+        '201':
+          description: Employé créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/employes/{id}/:
+    get:
+      tags: [Employes]
+      summary: Détail d'un employé
+      description: >
+        Retourne le profil complet d'un employé incluant
+        toutes ses informations personnelles et professionnelles.
+        Retourne 404 si l'employé appartient à un autre tenant
+        (isolation multi-tenant garantie).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Employé trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Employes]
+      summary: Modifier un employé (mise à jour partielle)
+      description: >
+        Met à jour partiellement les informations d'un employé.
+        Seuls les champs fournis sont modifiés.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeUpdate'
+      responses:
+        '200':
+          description: Employé modifié avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employe'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Employes]
+      summary: Archiver un employé (soft delete)
+      description: >
+        Archive un employé — il est marqué statut=inactif
+        mais conservé en base pour l'historique des paies,
+        congés et contrats.
+        Réservé au rôle ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Employé archivé avec succès
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/employes/{id}/payslips/:
+    get:
+      tags: [Employes]
+      summary: Fiches de paie d'un employé
+      description: >
+        Retourne l'historique des fiches de paie d'un employé.
+        Un employé peut consulter ses propres fiches de paie.
+        Un RH_MANAGER et COMPTABLE voient toutes les fiches.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Liste des fiches de paie de l'employé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaies'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/employes/{id}/contrats/:
+    get:
+      tags: [Employes]
+      summary: Contrats d'un employé
+      description: >
+        Retourne l'historique complet des contrats d'un employé.
+        Inclut les contrats expirés et résiliés pour l'historique.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Liste des contrats de l'employé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedContrats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/employes/{id}/conges/:
+    get:
+      tags: [Employes]
+      summary: Congés d'un employé
+      description: >
+        Retourne l'historique des congés d'un employé.
+        Un employé peut consulter ses propres congés.
+        Un RH_MANAGER peut consulter les congés de tous.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Liste des congés de l'employé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConges'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # CONTRATS
+  # Gestion des contrats de travail des employés
+  # ==========================================================
+
+  /hr/contrats/:
+    get:
+      tags: [Contrats]
+      summary: Lister les contrats
+      description: >
+        Retourne la liste paginée des contrats du tenant courant.
+        Filtrable par statut, type de contrat et employé.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: employe_id
+          in: query
+          required: false
+          description: Filtrer par employé (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: type_contrat
+          in: query
+          required: false
+          description: Filtrer par type de contrat
+          schema:
+            type: string
+            enum: [CDI, CDD, Stage, Freelance, Apprentissage, Interim]
+        - name: statut
+          in: query
+          required: false
+          description: Filtrer par statut du contrat
+          schema:
+            type: string
+            enum: [en_attente, actif, expire, resilie, suspendu]
+        - name: is_active
+          in: query
+          required: false
+          description: Filtrer les contrats actifs uniquement
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Liste paginée des contrats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedContrats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Contrats]
+      summary: Créer un contrat
+      description: >
+        Crée un nouveau contrat de travail pour un employé.
+        Un numéro de contrat unique est auto-généré (ex: CTR-2024-001).
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContratCreate'
+            example:
+              employe_id: uuid-employe
+              type_contrat: CDI
+              start_date: "2024-01-15"
+              gross_salary: 600000
+              currency: XAF
+              work_hours_per_week: 40
+              trial_period: 90
+              document_url: https://storage.formuloo.com/contrats/ctr-001.pdf
+      responses:
+        '201':
+          description: Contrat créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contrat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/contrats/{id}/:
+    get:
+      tags: [Contrats]
+      summary: Détail d'un contrat
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Contrat trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contrat'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Contrats]
+      summary: Modifier un contrat
+      description: >
+        Met à jour les informations d'un contrat.
+        Seuls les champs fournis sont modifiés.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContratCreate'
+      responses:
+        '200':
+          description: Contrat modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contrat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Contrats]
+      summary: Résilier un contrat
+      description: >
+        Marque un contrat comme résilié (soft delete).
+        Le contrat est conservé pour l'historique.
+        Réservé au rôle ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Contrat résilié
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # CONGÉS
+  # Gestion des demandes et approbations de congés
+  # ==========================================================
+
+  /hr/leaves/:
+    get:
+      tags: [Conges]
+      summary: Lister les demandes de congés
+      description: >
+        Retourne la liste paginée des demandes de congés du tenant.
+        Un RH_MANAGER voit tous les congés du tenant.
+        Un EMPLOYE ne voit que ses propres demandes.
+        Filtrable par statut, type et période.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: employe_id
+          in: query
+          required: false
+          description: Filtrer par employé (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: statut
+          in: query
+          required: false
+          description: Filtrer par statut de la demande
+          schema:
+            type: string
+            enum: [pending, approved, rejected, annule]
+        - name: type_conge
+          in: query
+          required: false
+          description: Filtrer par type de congé
+          schema:
+            type: string
+            enum: [annuel, maladie, maternite, paternite, sans_solde, exceptionnel, recuperation, formation, deces]
+        - name: date_debut
+          in: query
+          required: false
+          description: Date de début minimale (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          required: false
+          description: Date de fin maximale (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Liste paginée des demandes de congés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConges'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Conges]
+      summary: Soumettre une demande de congé
+      description: >
+        Crée une nouvelle demande de congé.
+        La demande est créée avec le statut pending.
+        Le nombre de jours est calculé automatiquement.
+        Un RH_MANAGER doit ensuite l'approuver ou la rejeter.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeCreate'
+            example:
+              type_conge: annuel
+              start_date: "2024-07-01"
+              end_date: "2024-07-15"
+              reason: Congé annuel estival
+      responses:
+        '201':
+          description: Demande de congé soumise avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /hr/leaves/{id}/:
+    get:
+      tags: [Conges]
+      summary: Détail d'une demande de congé
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Demande de congé trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Conges]
+      summary: Modifier une demande de congé
+      description: >
+        Modifie une demande de congé en statut pending uniquement.
+        Impossible de modifier une demande déjà approuvée ou rejetée.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CongeCreate'
+      responses:
+        '200':
+          description: Demande modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Conges]
+      summary: Annuler une demande de congé
+      description: >
+        Annule une demande de congé en statut pending uniquement.
+        Impossible d'annuler une demande déjà approuvée.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Demande annulée
+        '400':
+          description: Impossible d'annuler une demande approuvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/leaves/{id}/approve/:
+    post:
+      tags: [Conges]
+      summary: Approuver une demande de congé
+      description: >
+        Change le statut de pending à approved.
+        Décrémente automatiquement le solde de congés de l'employé.
+        Met à jour le statut de l'employé à en_conge pendant la période.
+        Réservé aux rôles RH_MANAGER et ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                commentaire:
+                  type: string
+                  description: Commentaire optionnel de l'approbation
+      responses:
+        '200':
+          description: Congé approuvé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+        '400':
+          description: Demande déjà traitée ou solde insuffisant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/leaves/{id}/reject/:
+    post:
+      tags: [Conges]
+      summary: Rejeter une demande de congé
+      description: >
+        Change le statut de pending à rejected.
+        Un motif de rejet est obligatoire.
+        Réservé aux rôles RH_MANAGER et ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  description: Motif obligatoire du rejet
+      responses:
+        '200':
+          description: Congé rejeté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # SOLDES DE CONGÉS
+  # ==========================================================
+
+  /hr/soldes-conges/:
+    get:
+      tags: [SoldesConges]
+      summary: Lister les soldes de congés
+      description: >
+        Retourne les soldes de congés des employés du tenant.
+        Filtrable par employé et par année.
+        Un employé ne voit que son propre solde.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: employe_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: annee
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 2024
+        - name: type_conge
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [annuel, maladie, sans_solde, exceptionnel]
+      responses:
+        '200':
+          description: Liste des soldes de congés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSoldesConges'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /hr/soldes-conges/{id}/:
+    get:
+      tags: [SoldesConges]
+      summary: Détail d'un solde de congés
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Solde trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoldeConges'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # PRÉSENCES
+  # ==========================================================
+
+  /hr/presences/:
+    get:
+      tags: [Presences]
+      summary: Lister les présences
+      description: >
+        Retourne la liste paginée des pointages du tenant.
+        Filtrable par employé, date et statut.
+        Réservé aux rôles ADMIN_PME et RH_MANAGER.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: employe_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: statut
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [present, absent, retard, conge, ferie]
+        - name: date_debut
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Liste paginée des présences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPresences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Presences]
+      summary: Enregistrer une présence
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceCreate'
+      responses:
+        '201':
+          description: Présence enregistrée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/presences/{id}/:
+    get:
+      tags: [Presences]
+      summary: Détail d'une présence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Présence trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Presences]
+      summary: Modifier une présence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceCreate'
+      responses:
+        '200':
+          description: Présence modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Presences]
+      summary: Supprimer une présence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Présence supprimée
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================
+  # FICHES DE PAIE (PAYROLL)
+  # Génération et consultation des fiches de paie SYSCOHADA
+  # ==========================================================
+
+  /hr/payroll/:
+    get:
+      tags: [Paies]
+      summary: Lister les fiches de paie
+      description: >
+        Retourne la liste paginée des fiches de paie du tenant.
+        Un EMPLOYE ne voit que ses propres fiches.
+        Un COMPTABLE et RH_MANAGER voient toutes les fiches.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: employe_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: mois
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: annee
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 2024
+        - name: statut
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [brouillon, valide, paye]
+      responses:
+        '200':
+          description: Liste paginée des fiches de paie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaies'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Paies]
+      summary: Générer une fiche de paie
+      description: >
+        Génère une fiche de paie pour un employé et un mois donné.
+        Le salaire net est calculé automatiquement selon SYSCOHADA :
+        net = brut + primes - cnps - irpp - autres_deductions.
+        Réservé aux rôles RH_MANAGER et COMPTABLE.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaieCreate'
+      responses:
+        '201':
+          description: Fiche de paie générée avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paie'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/payroll/run/:
+    post:
+      tags: [Paies]
+      summary: Lancer la génération de paie en masse
+      description: >
+        Lance la génération automatique des fiches de paie
+        pour TOUS les employés actifs du tenant pour un mois donné.
+        Tâche asynchrone — retourne un job_id pour suivi.
+        Réservé aux rôles RH_MANAGER et COMPTABLE.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mois, annee]
+              properties:
+                mois:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                  description: Mois de la paie (1-12)
+                annee:
+                  type: integer
+                  description: Année de la paie
+                  example: 2024
+            example:
+              mois: 6
+              annee: 2024
+      responses:
+        '202':
+          description: Génération lancée en arrière-plan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    description: Identifiant du job pour suivre l'avancement
+                  message:
+                    type: string
+                    example: Génération de paie lancée pour 06/2024
+                  nb_employes:
+                    type: integer
+                    description: Nombre d'employés concernés
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/payroll/periode/{periode}/:
+    get:
+      tags: [Paies]
+      summary: Fiches de paie d'une période
+      description: >
+        Retourne toutes les fiches de paie d'une période donnée.
+        Format de la période : YYYY-MM (ex: 2024-06).
+        Accessible aux rôles RH_MANAGER et COMPTABLE.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periode
+          in: path
+          required: true
+          description: Période au format YYYY-MM
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2024-06"
+      responses:
+        '200':
+          description: Fiches de paie de la période
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaies'
+        '400':
+          description: Format de période invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /hr/payroll/{id}/:
+    get:
+      tags: [Paies]
+      summary: Détail d'une fiche de paie
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Fiche de paie trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paie'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Paies]
+      summary: Modifier une fiche de paie
+      description: >
+        Modifie une fiche de paie en statut brouillon uniquement.
+        Impossible de modifier une fiche validée ou payée.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaieCreate'
+      responses:
+        '200':
+          description: Fiche modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paie'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Paies]
+      summary: Supprimer une fiche de paie
+      description: >
+        Supprime une fiche en statut brouillon uniquement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '204':
+          description: Fiche supprimée
+        '400':
+          description: Impossible de supprimer une fiche validée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/payroll/{id}/valider/:
+    post:
+      tags: [Paies]
+      summary: Valider une fiche de paie
+      description: >
+        Change le statut de brouillon à valide.
+        Déclenche un événement vers le service Comptabilité
+        pour la génération de l'écriture SYSCOHADA.
+        Réservé aux rôles RH_MANAGER et COMPTABLE.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          description: Fiche de paie validée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paie'
+        '400':
+          description: Fiche déjà validée ou payée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hr/payroll/{id}/payer/:
+    post:
+      tags: [Paies]
+      summary: Marquer une fiche comme payée
+      description: >
+        Change le statut de valide à paye.
+        Enregistre la date et le mode de paiement.
+        Réservé aux rôles COMPTABLE et ADMIN_PME.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode_paiement]
+              properties:
+                mode_paiement:
+                  type: string
+                  enum: [virement, especes, mobile_money, cheque]
+      responses:
+        '200':
+          description: Fiche marquée comme payée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paie'
+        '400':
+          description: Fiche non validée ou déjà payée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ============================================================
+# COMPOSANTS RÉUTILISABLES
+# ============================================================
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token JWT émis par Keycloak (OAuth2/OIDC).
+        Format : Authorization: Bearer <access_token>.
+        Durée de vie : 15 minutes.
+        Contient : user_id, tenant_id, roles.
+
+  # ----------------------------------------------------------
+  # PARAMÈTRES RÉUTILISABLES
+  # ----------------------------------------------------------
+  parameters:
+
+    UuidId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant unique UUID de la ressource
+      schema:
+        type: string
+        format: uuid
+        example: "4388ffa0-c5fa-4136-9270-0abadc873747"
+
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Numéro de page (commence à 1)
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      description: Nombre d'éléments par page (max 100)
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+    Search:
+      name: search
+      in: query
+      required: false
+      description: Recherche full-text sur les champs principaux
+      schema:
+        type: string
+
+  # ----------------------------------------------------------
+  # SCHÉMAS DE DONNÉES
+  # ----------------------------------------------------------
+  schemas:
+
+    # ── DÉPARTEMENT ───────────────────────────────────────
+
+    Departement:
+      type: object
+      description: >
+        Département de l'organigramme d'une PME.
+        Supporte la hiérarchie parent/enfant pour les sous-départements.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifiant unique UUID
+        nom:
+          type: string
+          description: Nom du département
+          example: Informatique
+        code:
+          type: string
+          description: Code unique du département dans le tenant
+          example: INFO
+        description:
+          type: string
+          nullable: true
+          description: Description du rôle du département
+        parent:
+          $ref: '#/components/schemas/DepartementBrief'
+          nullable: true
+          description: Département parent — null si département racine
+        responsable:
+          $ref: '#/components/schemas/EmployeBrief'
+          nullable: true
+          description: Responsable du département
+        budget:
+          type: number
+          format: decimal
+          nullable: true
+          description: Budget annuel alloué au département
+        devise:
+          type: string
+          default: XAF
+          description: Devise du budget
+        nb_employes:
+          type: integer
+          description: Nombre d'employés actifs — calculé dynamiquement
+        is_active:
+          type: boolean
+          description: Indique si le département est actif
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DepartementTree:
+      type: object
+      description: Département avec ses sous-départements (vue arborescente)
+      properties:
+        id:
+          type: string
+          format: uuid
+        nom:
+          type: string
+        code:
+          type: string
+        nb_employes:
+          type: integer
+        sous_departements:
+          type: array
+          items:
+            $ref: '#/components/schemas/DepartementTree'
+          description: Sous-départements enfants (récursif)
+
+    DepartementCreate:
+      type: object
+      required: [nom, code]
+      properties:
+        nom:
+          type: string
+          description: Nom du département
+        code:
+          type: string
+          description: Code unique dans le tenant
+        description:
+          type: string
+          nullable: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID du département parent — null si racine
+        responsable_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID de l'employé responsable
+        budget:
+          type: number
+          nullable: true
+        devise:
+          type: string
+          default: XAF
+
+    DepartementBrief:
+      type: object
+      description: Version simplifiée du département pour les références
+      properties:
+        id:
+          type: string
+          format: uuid
+        nom:
+          type: string
+        code:
+          type: string
+
+    PaginatedDepartements:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Departement'
+
+    # ── POSTE ─────────────────────────────────────────────
+
+    Poste:
+      type: object
+      description: Poste disponible dans l'organigramme
+      properties:
+        id:
+          type: string
+          format: uuid
+        departement:
+          $ref: '#/components/schemas/DepartementBrief'
+        titre:
+          type: string
+          description: Intitulé du poste
+          example: Développeur Backend Senior
+        code:
+          type: string
+          description: Code unique du poste
+          example: DEV-BACK-SR
+        description:
+          type: string
+          nullable: true
+        niveau:
+          type: string
+          enum: [junior, mid, senior, manager, directeur]
+          description: Niveau hiérarchique du poste
+        salaire_min:
+          type: number
+          nullable: true
+          description: Salaire minimum pour ce poste
+        salaire_max:
+          type: number
+          nullable: true
+          description: Salaire maximum pour ce poste
+        devise:
+          type: string
+          default: XAF
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PosteCreate:
+      type: object
+      required: [titre, code, departement_id, niveau]
+      properties:
+        titre:
+          type: string
+        code:
+          type: string
+        departement_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          nullable: true
+        niveau:
+          type: string
+          enum: [junior, mid, senior, manager, directeur]
+        salaire_min:
+          type: number
+          nullable: true
+        salaire_max:
+          type: number
+          nullable: true
+        devise:
+          type: string
+          default: XAF
+
+    PosteBrief:
+      type: object
+      description: Version simplifiée du poste pour les références
+      properties:
+        id:
+          type: string
+          format: uuid
+        titre:
+          type: string
+        code:
+          type: string
+        niveau:
+          type: string
+          enum: [junior, mid, senior, manager, directeur]
+
+    PaginatedPostes:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Poste'
+
+    # ── EMPLOYÉ ───────────────────────────────────────────
+
+    Employe:
+      type: object
+      description: >
+        Profil complet d'un employé d'une PME.
+        Conforme au CDC Formuloo OS v1.0.
+        Toutes les données sont isolées par tenant_id.
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee_number:
+          type: string
+          description: Matricule unique auto-généré dans le tenant
+          example: EMP-2024-001
+
+        # ── Informations personnelles ──
+        first_name:
+          type: string
+          description: Prénom
+        last_name:
+          type: string
+          description: Nom de famille
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date de naissance
+        gender:
+          type: string
+          enum: [M, F, Other]
+          description: Genre — M/F/Other (conforme CDC)
+        nationality:
+          type: string
+          nullable: true
+          description: Nationalité
+        national_id:
+          type: string
+          nullable: true
+          description: Numéro CNI — chiffré en base
+        situation_familiale:
+          type: string
+          enum: [celibataire, marie, divorce, veuf]
+          nullable: true
+        nombre_enfants:
+          type: integer
+          default: 0
+        numero_cnps:
+          type: string
+          nullable: true
+          description: Numéro CNPS (Cameroun)
+
+        # ── Coordonnées ──
+        address:
+          type: string
+          nullable: true
+          description: Adresse complète
+        phone:
+          type: string
+          description: Téléphone professionnel
+          example: "+237699000000"
+        email:
+          type: string
+          format: email
+          description: Email professionnel unique dans le tenant
+
+        # ── Informations professionnelles ──
+        department:
+          $ref: '#/components/schemas/DepartementBrief'
+          nullable: true
+        position:
+          $ref: '#/components/schemas/PosteBrief'
+          nullable: true
+        manager:
+          $ref: '#/components/schemas/EmployeBrief'
+          nullable: true
+          description: Manager / supérieur hiérarchique direct
+        hire_date:
+          type: string
+          format: date
+          description: Date d'embauche
+        status:
+          type: string
+          enum: [active, inactive, on_leave, terminated, suspended]
+          description: >
+            active = actif,
+            inactive = inactif,
+            on_leave = en congé,
+            terminated = licencié/démissionné,
+            suspended = suspendu
+        type_employe:
+          type: string
+          enum: [permanent, contractuel, stagiaire, consultant]
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EmployeBrief:
+      type: object
+      description: Version simplifiée d'un employé pour les références
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee_number:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    EmployeCreate:
+      type: object
+      required: [first_name, last_name, gender, email, phone, hire_date, status]
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          type: string
+          enum: [M, F, Other]
+        nationality:
+          type: string
+          nullable: true
+        national_id:
+          type: string
+          nullable: true
+          description: Numéro CNI — sera chiffré automatiquement
+        situation_familiale:
+          type: string
+          enum: [celibataire, marie, divorce, veuf]
+          nullable: true
+        nombre_enfants:
+          type: integer
+          default: 0
+        numero_cnps:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        position_id:
+          type: string
+          format: uuid
+          nullable: true
+        manager_id:
+          type: string
+          format: uuid
+          nullable: true
+        hire_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, inactive, on_leave, terminated, suspended]
+          default: active
+        type_employe:
+          type: string
+          enum: [permanent, contractuel, stagiaire, consultant]
+          default: permanent
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+
+    EmployeUpdate:
+      type: object
+      description: Tous les champs sont optionnels — mise à jour partielle
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        situation_familiale:
+          type: string
+          enum: [celibataire, marie, divorce, veuf]
+        nombre_enfants:
+          type: integer
+        phone:
+          type: string
+        address:
+          type: string
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        position_id:
+          type: string
+          format: uuid
+          nullable: true
+        manager_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive, on_leave, terminated, suspended]
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+
+    PaginatedEmployes:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Nombre total d'employés dans le tenant
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Employe'
+
+    # ── CONTRAT ───────────────────────────────────────────
+
+    Contrat:
+      type: object
+      description: Contrat de travail d'un employé — conforme CDC Formuloo
+      properties:
+        id:
+          type: string
+          format: uuid
+        numero:
+          type: string
+          description: Numéro unique auto-généré
+          example: CTR-2024-001
+        employee:
+          $ref: '#/components/schemas/EmployeBrief'
+        type:
+          type: string
+          enum: [CDI, CDD, Interim, Stage, Freelance]
+          description: Type de contrat conforme CDC
+        start_date:
+          type: string
+          format: date
+          description: Date de début du contrat
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date de fin — null pour les CDI
+        gross_salary:
+          type: number
+          format: decimal
+          description: Salaire brut mensuel
+        currency:
+          type: string
+          default: XAF
+          description: Devise (XAF, EUR, USD...)
+        work_hours_per_week:
+          type: integer
+          default: 40
+          description: Heures de travail par semaine
+        trial_period:
+          type: integer
+          nullable: true
+          description: Durée de la période d'essai en jours
+        is_active:
+          type: boolean
+          description: Indique si le contrat est actif
+        document_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du contrat signé numérisé
+        signed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date et heure de signature du contrat
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ContratCreate:
+      type: object
+      required: [employe_id, type, start_date, gross_salary]
+      properties:
+        employe_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [CDI, CDD, Interim, Stage, Freelance]
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        gross_salary:
+          type: number
+        currency:
+          type: string
+          default: XAF
+        work_hours_per_week:
+          type: integer
+          default: 40
+        trial_period:
+          type: integer
+          nullable: true
+        document_url:
+          type: string
+          format: uri
+          nullable: true
+        signed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ContratBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        numero:
+          type: string
+        type:
+          type: string
+        is_active:
+          type: boolean
+
+    PaginatedContrats:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contrat'
+
+    # ── CONGÉ ─────────────────────────────────────────────
+
+    Conge:
+      type: object
+      description: Demande de congé d'un employé — conforme CDC Formuloo
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee:
+          $ref: '#/components/schemas/EmployeBrief'
+        type:
+          $ref: '#/components/schemas/LeaveType'
+          description: Type de congé
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        days:
+          type: integer
+          description: Nombre de jours calculé automatiquement
+        reason:
+          type: string
+          nullable: true
+          description: Motif de la demande
+        status:
+          type: string
+          enum: [pending, approved, rejected, annule]
+          description: Statut de la demande
+        approved_by:
+          $ref: '#/components/schemas/EmployeBrief'
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    LeaveType:
+      type: object
+      description: Type de congé
+      properties:
+        code:
+          type: string
+          enum: [annuel, maladie, maternite, paternite, sans_solde, exceptionnel, recuperation, formation, deces]
+        libelle:
+          type: string
+          example: Congé annuel
+
+    CongeCreate:
+      type: object
+      required: [type_conge, start_date, end_date]
+      properties:
+        type_conge:
+          type: string
+          enum: [annuel, maladie, maternite, paternite, sans_solde, exceptionnel, recuperation, formation, deces]
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          nullable: true
+
+    PaginatedConges:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conge'
+
+    # ── SOLDE DE CONGÉS ───────────────────────────────────
+
+    SoldeConges:
+      type: object
+      description: Capital congés d'un employé pour une année donnée
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee:
+          $ref: '#/components/schemas/EmployeBrief'
+        type_conge:
+          type: string
+          enum: [annuel, maladie, sans_solde, exceptionnel]
+        annee:
+          type: integer
+          example: 2024
+        jours_acquis:
+          type: number
+          format: decimal
+        jours_pris:
+          type: number
+          format: decimal
+        jours_restants:
+          type: number
+          format: decimal
+          description: Solde restant calculé automatiquement
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PaginatedSoldesConges:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoldeConges'
+
+    # ── PRÉSENCE ──────────────────────────────────────────
+
+    Presence:
+      type: object
+      description: Enregistrement de présence quotidien d'un employé
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee:
+          $ref: '#/components/schemas/EmployeBrief'
+        date:
+          type: string
+          format: date
+        heure_arrivee:
+          type: string
+          format: time
+          nullable: true
+          example: "08:00"
+        heure_depart:
+          type: string
+          format: time
+          nullable: true
+          example: "17:00"
+        heures_travaillees:
+          type: number
+          format: decimal
+          nullable: true
+          description: Calculé automatiquement
+        heures_supplementaires:
+          type: number
+          format: decimal
+          default: 0
+        statut:
+          type: string
+          enum: [present, absent, retard, conge, ferie]
+        commentaire:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PresenceCreate:
+      type: object
+      required: [employe_id, date, statut]
+      properties:
+        employe_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        heure_arrivee:
+          type: string
+          format: time
+          nullable: true
+        heure_depart:
+          type: string
+          format: time
+          nullable: true
+        heures_supplementaires:
+          type: number
+          default: 0
+        statut:
+          type: string
+          enum: [present, absent, retard, conge, ferie]
+        commentaire:
+          type: string
+          nullable: true
+
+    PaginatedPresences:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Presence'
+
+    # ── FICHE DE PAIE ─────────────────────────────────────
+
+    Paie:
+      type: object
+      description: >
+        Fiche de paie mensuelle conforme SYSCOHADA.
+        Intègre CNPS et IRPP (contexte camerounais/africain).
+        Lien vers l'écriture comptable via journal_entry_id.
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee:
+          $ref: '#/components/schemas/EmployeBrief'
+        period:
+          type: string
+          description: Période au format YYYY-MM
+          example: "2024-06"
+        mois:
+          type: integer
+          minimum: 1
+          maximum: 12
+        annee:
+          type: integer
+
+        # ── Salaire de base ──
+        gross:
+          type: number
+          format: decimal
+          description: Salaire brut total
+
+        # ── Primes (JSON conforme CDC) ──
+        bonuses:
+          type: object
+          description: Détail des primes en JSON
+          properties:
+            prime_transport:
+              type: number
+              default: 0
+            prime_logement:
+              type: number
+              default: 0
+            prime_rendement:
+              type: number
+              default: 0
+            autres:
+              type: number
+              default: 0
+
+        # ── Déductions SYSCOHADA (JSON conforme CDC) ──
+        deductions:
+          type: object
+          description: Détail des déductions en JSON
+          properties:
+            cotisation_cnps:
+              type: number
+              default: 0
+              description: CNPS — Caisse Nationale Prévoyance Sociale
+            impot_irpp:
+              type: number
+              default: 0
+              description: IRPP — Impôt Revenu Personnes Physiques
+            credit_logement:
+              type: number
+              default: 0
+            autres:
+              type: number
+              default: 0
+
+        # ── Totaux ──
+        net_salary:
+          type: number
+          format: decimal
+          description: Salaire net = gross + bonuses - deductions
+        currency:
+          type: string
+          default: XAF
+
+        # ── Statut ──
+        statut:
+          type: string
+          enum: [brouillon, valide, paye]
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date de paiement effectif
+        pdf_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL du bulletin de paie PDF généré
+
+        # ── Lien Comptabilité ──
+        journal_entry_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >
+            ID de l'écriture comptable SYSCOHADA générée
+            automatiquement dans le service Comptabilité
+
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PaieCreate:
+      type: object
+      required: [employe_id, mois, annee]
+      properties:
+        employe_id:
+          type: string
+          format: uuid
+        mois:
+          type: integer
+          minimum: 1
+          maximum: 12
+        annee:
+          type: integer
+        bonuses:
+          type: object
+          properties:
+            prime_transport:
+              type: number
+              default: 0
+            prime_logement:
+              type: number
+              default: 0
+            prime_rendement:
+              type: number
+              default: 0
+            autres:
+              type: number
+              default: 0
+        deductions:
+          type: object
+          properties:
+            autres:
+              type: number
+              default: 0
+        currency:
+          type: string
+          default: XAF
+
+    PaginatedPaies:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Paie'
+
+    # ── ERREUR ────────────────────────────────────────────
+
+    Error:
+      type: object
+      description: Structure standard des erreurs — conforme GOVERNANCE.md
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Code machine de l'erreur
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Message lisible par l'utilisateur
+            details:
+              type: array
+              description: Détails par champ en cas d'erreur de validation
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    example: email
+                  message:
+                    type: string
+                    example: Ce champ est obligatoire.
+
+  # ----------------------------------------------------------
+  # RÉPONSES RÉUTILISABLES
+  # ----------------------------------------------------------
+  responses:
+
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Les données fournies sont invalides.
+              details:
+                - field: email
+                  message: Ce champ est obligatoire.
+
+    Unauthorized:
+      description: Token JWT absent, expiré ou révoqué
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: AUTHENTICATION_FAILED
+              message: Token JWT invalide ou expiré.
+
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: PERMISSION_DENIED
+              message: Vous n'avez pas les permissions nécessaires.
+
+    NotFound:
+      description: Ressource introuvable ou appartenant à un autre tenant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: La ressource demandée n'existe pas.

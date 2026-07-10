@@ -1,0 +1,2291 @@
+# ============================================================
+# CONTRAT OPENAPI 3.0 — COMPTA SERVICE
+# ============================================================
+# Projet      : Formuloo OS — ERP cloud pour PME africaines
+# Service     : COMPTA Service
+# Version     : 2.1.0
+# Auteur      : CHOWUINOU TEGUIA
+# Date        : 2024-2025
+# Description : Contrat OpenAPI du service COMPTA.
+#               Comptabilité générale OHADA + facturation.
+#               Toutes les données sont isolées par tenant_id.
+#               Chaque endpoint requiert un JWT valide (Bearer Token).
+#               Validé par Schemathesis dans le pipeline CI/CD GitLab.
+# Plan comptable OHADA — 8 classes :
+#   1-Ressources durables  2-Actif immobilisé  3-Actif circulant HAO
+#   4-Tiers  5-Trésorerie  6-Charges  7-Produits  8-HAO
+# ============================================================
+
+openapi: 3.0.0
+info:
+  title: Formuloo OS — Compta Service API
+  version: 2.1.0
+  description: >
+    Service de comptabilité de Formuloo OS.
+    Comptabilité générale conforme OHADA : plan de comptes, écritures
+    débit/crédit, journaux, grand livre, balance, bilan, compte de résultat.
+    Facturation clients avec génération automatique d'écritures.
+    Lettrage des écritures (rapprochement), génération PDF factures.
+    Immobilisations OHADA Classe 2 avec amortissements linéaires/dégressifs.
+
+servers:
+  - url: http://localhost:8002/api/v1
+    description: Serveur de développement
+  - url: https://api.formuloo.com/api/v1
+    description: Serveur de production
+
+tags:
+  - name: Exercices
+    description: Exercices comptables (années fiscales)
+  - name: Comptes
+    description: Plan de comptes OHADA
+  - name: Journaux
+    description: Journaux comptables
+  - name: Ecritures
+    description: Écritures comptables (débit/crédit)
+  - name: Lettrage
+    description: Lettrage des écritures — rapprochement facture/paiement
+  - name: Factures
+    description: Facturation clients
+  - name: Paiements
+    description: Paiements et encaissements
+  - name: Immobilisations
+    description: Immobilisations OHADA Classe 2 — amortissements linéaire/dégressif
+  - name: Etats
+    description: États financiers (grand livre, balance, bilan, compte de résultat)
+
+paths:
+
+  # ── EXERCICES ──────────────────────────────────────────────
+
+  /compta/exercices/:
+    get:
+      tags: [Exercices]
+      summary: Lister les exercices comptables
+      x-required-permission: compta.read.exercices
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Liste des exercices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExercices'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Exercices]
+      summary: Créer un exercice comptable
+      x-required-permission: compta.write.exercices
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExerciceCreate'
+            example:
+              annee: 2024
+              date_debut: "2024-01-01"
+              date_fin: "2024-12-31"
+      responses:
+        '201':
+          description: Exercice créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exercice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/exercices/{id}/:
+    get:
+      tags: [Exercices]
+      summary: Détail d'un exercice
+      x-required-permission: compta.read.exercices
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Exercice trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exercice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/exercices/{id}/cloturer/:
+    post:
+      tags: [Exercices]
+      summary: Clôturer un exercice comptable
+      description: Clôture définitive — aucune écriture ne peut être ajoutée après.
+      x-required-permission: compta.close.exercices
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Exercice clôturé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exercice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── PLAN DE COMPTES ────────────────────────────────────────
+
+  /compta/comptes/:
+    get:
+      tags: [Comptes]
+      summary: Lister les comptes du plan comptable
+      x-required-permission: compta.read.comptes
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: classe
+          in: query
+          description: Classe OHADA (1 à 8)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+        - name: type_compte
+          in: query
+          schema:
+            type: string
+            enum: [ACTIF, PASSIF, CHARGE, PRODUIT]
+      responses:
+        '200':
+          description: Plan de comptes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComptes'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Comptes]
+      summary: Créer un compte comptable
+      x-required-permission: compta.write.comptes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompteCreate'
+            example:
+              numero: "411000"
+              libelle: "Clients"
+              classe: 4
+              type_compte: ACTIF
+      responses:
+        '201':
+          description: Compte créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Compte'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/comptes/{id}/:
+    get:
+      tags: [Comptes]
+      summary: Détail d'un compte
+      x-required-permission: compta.read.comptes
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Compte trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Compte'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Comptes]
+      summary: Modifier un compte
+      x-required-permission: compta.write.comptes
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompteUpdate'
+      responses:
+        '200':
+          description: Compte modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Compte'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Comptes]
+      summary: Supprimer un compte
+      description: Impossible si des écritures existent sur ce compte.
+      x-required-permission: compta.delete.comptes
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Compte supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── JOURNAUX ───────────────────────────────────────────────
+
+  /compta/journaux/:
+    get:
+      tags: [Journaux]
+      summary: Lister les journaux comptables
+      x-required-permission: compta.read.journaux
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Liste des journaux
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedJournaux'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Journaux]
+      summary: Créer un journal comptable
+      x-required-permission: compta.write.journaux
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalCreate'
+            example:
+              code: "VTE"
+              libelle: "Journal des ventes"
+              type: VENTES
+      responses:
+        '201':
+          description: Journal créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Journal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/journaux/{id}/:
+    get:
+      tags: [Journaux]
+      summary: Détail d'un journal
+      x-required-permission: compta.read.journaux
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Journal trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Journal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── ÉCRITURES ──────────────────────────────────────────────
+
+  /compta/ecritures/:
+    get:
+      tags: [Ecritures]
+      summary: Lister les écritures comptables
+      x-required-permission: compta.read.ecritures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: journal_id
+          in: query
+          schema:
+            type: integer
+        - name: exercice_id
+          in: query
+          schema:
+            type: integer
+        - name: date_debut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [BROUILLON, VALIDEE]
+      responses:
+        '200':
+          description: Liste des écritures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEcritures'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Ecritures]
+      summary: Créer une écriture comptable
+      description: >
+        La somme des débits doit être égale à la somme des crédits.
+        Toute écriture déséquilibrée est rejetée (400).
+      x-required-permission: compta.write.ecritures
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EcritureCreate'
+            example:
+              journal_id: 1
+              exercice_id: 1
+              date_ecriture: "2024-06-01"
+              libelle: "Vente prestation informatique"
+              lignes:
+                - compte_id: 1
+                  libelle: "Client PME Beta"
+                  debit: "500000.00"
+                  credit: "0.00"
+                - compte_id: 2
+                  libelle: "Produits prestations"
+                  debit: "0.00"
+                  credit: "500000.00"
+      responses:
+        '201':
+          description: Écriture créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ecriture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/ecritures/{id}/:
+    get:
+      tags: [Ecritures]
+      summary: Détail d'une écriture
+      x-required-permission: compta.read.ecritures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Écriture trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ecriture'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Ecritures]
+      summary: Supprimer une écriture (brouillon uniquement)
+      x-required-permission: compta.delete.ecritures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Écriture supprimée
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/ecritures/{id}/valider/:
+    post:
+      tags: [Ecritures]
+      summary: Valider une écriture (irréversible)
+      x-required-permission: compta.validate.ecritures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Écriture validée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ecriture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── LETTRAGE ───────────────────────────────────────────────
+
+  /compta/ecritures/lettrer/:
+    post:
+      tags: [Lettrage]
+      summary: Lettrer des lignes d'écritures
+      description: >
+        Rapproche au moins 2 lignes d'écritures sous un même code de lettrage.
+        Contraintes : toutes les lignes doivent appartenir au même tenant,
+        aucune ne doit déjà être lettrée, et la somme des débits doit
+        égaler la somme des crédits (équilibre OHADA).
+      x-required-permission: compta.write.ecritures
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LettrageRequest'
+            example:
+              ligne_ids: [12, 15]
+      responses:
+        '200':
+          description: Lignes lettrées — code assigné
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LettrageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/ecritures/delettrer/:
+    post:
+      tags: [Lettrage]
+      summary: Délettrer un groupe de lignes
+      description: Retire le code de lettrage de toutes les lignes partageant ce code.
+      x-required-permission: compta.write.ecritures
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DelettrerRequest'
+            example:
+              code_lettrage: "A"
+      responses:
+        '200':
+          description: Lignes deletrées
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  nb_lignes:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/ecritures/lettrage/:
+    get:
+      tags: [Lettrage]
+      summary: Lister les lignes d'un compte filtrées par lettrage
+      x-required-permission: compta.read.ecritures
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: compte_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: non_lettre
+          in: query
+          description: true = lignes sans lettrage ; false = lignes lettrées
+          schema:
+            type: boolean
+            default: true
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Liste des lignes filtrées
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLignesLettrage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── FACTURES ───────────────────────────────────────────────
+
+  /compta/factures/:
+    get:
+      tags: [Factures]
+      summary: Lister les factures clients
+      x-required-permission: compta.read.factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [BROUILLON, EMISE, PAYEE, ANNULEE]
+        - name: date_debut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Liste des factures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFactures'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Factures]
+      summary: Créer une facture client
+      description: Génère automatiquement une écriture comptable au journal des ventes.
+      x-required-permission: compta.write.factures
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactureCreate'
+            example:
+              client_nom: "PME Beta SARL"
+              client_email: "contact@pme-beta.com"
+              lignes:
+                - description: "Développement API REST"
+                  quantite: 1
+                  prix_unitaire: "500000.00"
+              devise: XAF
+              date_echeance: "2024-07-31"
+      responses:
+        '201':
+          description: Facture créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/factures/{id}/:
+    get:
+      tags: [Factures]
+      summary: Détail d'une facture
+      x-required-permission: compta.read.factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Facture trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Factures]
+      summary: Modifier une facture (brouillon uniquement)
+      x-required-permission: compta.write.factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactureUpdate'
+      responses:
+        '200':
+          description: Facture modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Factures]
+      summary: Annuler une facture
+      x-required-permission: compta.delete.factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Facture annulée
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/factures/{id}/emettre/:
+    post:
+      tags: [Factures]
+      summary: Émettre une facture (BROUILLON → EMISE)
+      x-required-permission: compta.write.factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Facture émise
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Facture'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/factures/{id}/pdf/:
+    get:
+      tags: [Factures]
+      summary: Télécharger la facture en PDF
+      description: >
+        Génère à la volée le PDF de la facture (ReportLab A4).
+        Réservé aux factures EMISE, PAYEE ou ANNULEE — les brouillons
+        retournent 400.
+      x-required-permission: compta.read.factures
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Fichier PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Facture en statut BROUILLON — PDF non disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── PAIEMENTS ──────────────────────────────────────────────
+
+  /compta/paiements/:
+    get:
+      tags: [Paiements]
+      summary: Lister les paiements
+      x-required-permission: compta.read.paiements
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: facture_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Liste des paiements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaiements'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Paiements]
+      summary: Enregistrer un paiement
+      description: Génère automatiquement une écriture au journal de trésorerie.
+      x-required-permission: compta.write.paiements
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaiementCreate'
+      responses:
+        '201':
+          description: Paiement enregistré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paiement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/paiements/{id}/:
+    get:
+      tags: [Paiements]
+      summary: Détail d'un paiement
+      x-required-permission: compta.read.paiements
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Paiement trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paiement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── IMMOBILISATIONS ────────────────────────────────────────
+
+  /compta/immobilisations/:
+    get:
+      tags: [Immobilisations]
+      summary: Lister les immobilisations
+      x-required-permission: compta.read.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, AMORTIE, CEDEE]
+        - name: categorie
+          in: query
+          schema:
+            type: string
+            enum: [INCORPORELLE, TERRAIN, CONSTRUCTION, MATERIEL, MOBILIER, VEHICULE, FINANCIERE]
+        - name: exercice_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Liste des immobilisations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedImmobilisations'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Immobilisations]
+      summary: Créer une immobilisation
+      description: >
+        Enregistre un actif immobilisé OHADA (Classe 2).
+        Le numéro de compte est calculé automatiquement selon la catégorie
+        si non fourni.
+      x-required-permission: compta.write.immobilisations
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImmobilisationCreate'
+            example:
+              designation: "Serveur Dell PowerEdge"
+              categorie: MATERIEL
+              valeur_origine: "2500000.00"
+              date_mise_en_service: "2024-01-15"
+              duree_vie: 5
+              methode: LINEAIRE
+              exercice_id: 1
+      responses:
+        '201':
+          description: Immobilisation créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Immobilisation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/immobilisations/dotations/:
+    get:
+      tags: [Immobilisations]
+      summary: Lister les dotations aux amortissements
+      x-required-permission: compta.read.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: immobilisation_id
+          in: query
+          schema:
+            type: integer
+        - name: exercice_id
+          in: query
+          schema:
+            type: integer
+        - name: annee
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Liste des dotations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDotations'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/immobilisations/{pk}/:
+    get:
+      tags: [Immobilisations]
+      summary: Détail d'une immobilisation
+      x-required-permission: compta.read.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Pk'
+      responses:
+        '200':
+          description: Immobilisation trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Immobilisation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Immobilisations]
+      summary: Modifier une immobilisation
+      x-required-permission: compta.write.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Pk'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImmobilisationUpdate'
+      responses:
+        '200':
+          description: Immobilisation modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Immobilisation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Immobilisations]
+      summary: Céder une immobilisation (ACTIVE → CEDEE)
+      description: >
+        Enregistre la cession de l'immobilisation. Le statut passe à CEDEE,
+        la date et la valeur nette de cession sont enregistrées.
+        Aucune suppression physique — l'historique est conservé.
+      x-required-permission: compta.write.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Pk'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                valeur_nette_cession:
+                  type: string
+                  format: decimal
+                  example: "500000.00"
+      responses:
+        '200':
+          description: Immobilisation cédée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Immobilisation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/immobilisations/{pk}/amortir/:
+    post:
+      tags: [Immobilisations]
+      summary: Comptabiliser la dotation aux amortissements
+      description: >
+        Calcule et comptabilise la dotation de l'année spécifiée.
+        Génère automatiquement une écriture OHADA : 6811 Dotations (débit)
+        / 28xx Amortissements (crédit). Idempotent : retourne 400 si la
+        dotation a déjà été comptabilisée pour cette année.
+      x-required-permission: compta.write.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Pk'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [annee, exercice_id]
+              properties:
+                annee:
+                  type: integer
+                  example: 2024
+                exercice_id:
+                  type: integer
+            example:
+              annee: 2024
+              exercice_id: 1
+      responses:
+        '201':
+          description: Dotation comptabilisée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DotationAmortissement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /compta/immobilisations/{pk}/plan/:
+    get:
+      tags: [Immobilisations]
+      summary: Plan d'amortissement complet
+      description: >
+        Retourne le tableau d'amortissement année par année sur toute la
+        durée de vie de l'immobilisation. Inclut VNC début, annuité,
+        cumul amortissements, VNC fin pour chaque exercice.
+      x-required-permission: compta.read.immobilisations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Pk'
+      responses:
+        '200':
+          description: Plan d'amortissement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanAmortissement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── ÉTATS FINANCIERS ───────────────────────────────────────
+
+  /compta/grand-livre/:
+    get:
+      tags: [Etats]
+      summary: Grand livre — mouvements par compte
+      x-required-permission: compta.read.etats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: exercice_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: compte_id
+          in: query
+          schema:
+            type: integer
+        - name: date_debut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_fin
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Grand livre
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrandLivre'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/balance/:
+    get:
+      tags: [Etats]
+      summary: Balance des comptes
+      x-required-permission: compta.read.etats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: exercice_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: classe
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+      responses:
+        '200':
+          description: Balance des comptes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/bilan/:
+    get:
+      tags: [Etats]
+      summary: Bilan comptable OHADA (actif/passif)
+      x-required-permission: compta.read.etats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: exercice_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: devise
+          in: query
+          schema:
+            type: string
+            enum: [XAF, EUR, USD]
+            default: XAF
+      responses:
+        '200':
+          description: Bilan OHADA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BilanOHADA'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /compta/compte-resultat/:
+    get:
+      tags: [Etats]
+      summary: Compte de résultat (charges/produits)
+      x-required-permission: compta.read.etats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: exercice_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: devise
+          in: query
+          schema:
+            type: string
+            enum: [XAF, EUR, USD]
+            default: XAF
+      responses:
+        '200':
+          description: Compte de résultat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompteResultat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    Pk:
+      name: pk
+      in: path
+      required: true
+      schema:
+        type: integer
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 20
+
+  schemas:
+
+    # ── EXERCICES ────────────────────────────────────────────
+
+    Exercice:
+      type: object
+      properties:
+        id:
+          type: integer
+        annee:
+          type: integer
+          example: 2024
+        date_debut:
+          type: string
+          format: date
+        date_fin:
+          type: string
+          format: date
+        statut:
+          type: string
+          enum: [OUVERT, CLOTURE]
+        created_at:
+          type: string
+          format: date-time
+
+    ExerciceCreate:
+      type: object
+      required: [annee, date_debut, date_fin]
+      properties:
+        annee:
+          type: integer
+        date_debut:
+          type: string
+          format: date
+        date_fin:
+          type: string
+          format: date
+
+    PaginatedExercices:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Exercice'
+
+    # ── PLAN DE COMPTES ──────────────────────────────────────
+
+    Compte:
+      type: object
+      properties:
+        id:
+          type: integer
+        numero:
+          type: string
+          example: "411000"
+        libelle:
+          type: string
+          example: "Clients"
+        classe:
+          type: integer
+          minimum: 1
+          maximum: 8
+        type_compte:
+          type: string
+          enum: [ACTIF, PASSIF, CHARGE, PRODUIT]
+        solde_debit:
+          type: string
+          format: decimal
+        solde_credit:
+          type: string
+          format: decimal
+        is_systeme:
+          type: boolean
+          description: Compte système non supprimable
+
+    CompteCreate:
+      type: object
+      required: [numero, libelle, classe, type_compte]
+      properties:
+        numero:
+          type: string
+        libelle:
+          type: string
+        classe:
+          type: integer
+          minimum: 1
+          maximum: 8
+        type_compte:
+          type: string
+          enum: [ACTIF, PASSIF, CHARGE, PRODUIT]
+
+    CompteUpdate:
+      type: object
+      properties:
+        libelle:
+          type: string
+
+    PaginatedComptes:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Compte'
+
+    # ── JOURNAUX ─────────────────────────────────────────────
+
+    Journal:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          example: "VTE"
+        libelle:
+          type: string
+          example: "Journal des ventes"
+        type:
+          type: string
+          enum: [VENTES, ACHATS, BANQUE, CAISSE, OD]
+
+    JournalCreate:
+      type: object
+      required: [code, libelle, type]
+      properties:
+        code:
+          type: string
+        libelle:
+          type: string
+        type:
+          type: string
+          enum: [VENTES, ACHATS, BANQUE, CAISSE, OD]
+
+    PaginatedJournaux:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Journal'
+
+    # ── ÉCRITURES ────────────────────────────────────────────
+
+    LigneEcriture:
+      type: object
+      properties:
+        id:
+          type: integer
+        compte_id:
+          type: integer
+        compte_numero:
+          type: string
+        compte_libelle:
+          type: string
+        libelle:
+          type: string
+        debit:
+          type: string
+          format: decimal
+          example: "500000.00"
+        credit:
+          type: string
+          format: decimal
+          example: "0.00"
+        lettre:
+          type: string
+          nullable: true
+          description: Code de lettrage assigné (A, B, ..., Z, AA, ...) — vide si non lettré
+          example: "A"
+
+    Ecriture:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_id:
+          type: integer
+        journal_code:
+          type: string
+        exercice_id:
+          type: integer
+        date_ecriture:
+          type: string
+          format: date
+        libelle:
+          type: string
+        statut:
+          type: string
+          enum: [BROUILLON, VALIDEE]
+        total_debit:
+          type: string
+          format: decimal
+        total_credit:
+          type: string
+          format: decimal
+        lignes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneEcriture'
+        created_at:
+          type: string
+          format: date-time
+
+    EcritureCreate:
+      type: object
+      required: [journal_id, exercice_id, date_ecriture, libelle, lignes]
+      properties:
+        journal_id:
+          type: integer
+        exercice_id:
+          type: integer
+        date_ecriture:
+          type: string
+          format: date
+        libelle:
+          type: string
+        lignes:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [compte_id, debit, credit]
+            properties:
+              compte_id:
+                type: integer
+              libelle:
+                type: string
+              debit:
+                type: string
+                format: decimal
+              credit:
+                type: string
+                format: decimal
+
+    PaginatedEcritures:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ecriture'
+
+    # ── FACTURES ─────────────────────────────────────────────
+
+    LigneFacture:
+      type: object
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        quantite:
+          type: string
+          format: decimal
+        prix_unitaire:
+          type: string
+          format: decimal
+        montant_total:
+          type: string
+          format: decimal
+
+    Facture:
+      type: object
+      properties:
+        id:
+          type: integer
+        numero:
+          type: string
+          example: "FAC-2024-001"
+        client_nom:
+          type: string
+        client_email:
+          type: string
+          format: email
+        lignes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneFacture'
+        montant_ht:
+          type: string
+          format: decimal
+        tva:
+          type: string
+          format: decimal
+        montant_ttc:
+          type: string
+          format: decimal
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+        statut:
+          type: string
+          enum: [BROUILLON, EMISE, PAYEE, ANNULEE]
+        date_emission:
+          type: string
+          format: date
+          nullable: true
+        date_echeance:
+          type: string
+          format: date
+        ecriture_id:
+          type: integer
+          nullable: true
+          description: Écriture comptable générée automatiquement
+        created_at:
+          type: string
+          format: date-time
+
+    FactureCreate:
+      type: object
+      required: [client_nom, lignes, devise, date_echeance]
+      properties:
+        client_nom:
+          type: string
+        client_email:
+          type: string
+          format: email
+        lignes:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [description, quantite, prix_unitaire]
+            properties:
+              description:
+                type: string
+              quantite:
+                type: string
+                format: decimal
+              prix_unitaire:
+                type: string
+                format: decimal
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+        date_echeance:
+          type: string
+          format: date
+
+    FactureUpdate:
+      type: object
+      properties:
+        client_nom:
+          type: string
+        client_email:
+          type: string
+          format: email
+        date_echeance:
+          type: string
+          format: date
+
+    PaginatedFactures:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Facture'
+
+    # ── PAIEMENTS ────────────────────────────────────────────
+
+    Paiement:
+      type: object
+      properties:
+        id:
+          type: integer
+        facture_id:
+          type: integer
+        montant:
+          type: string
+          format: decimal
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+        mode_paiement:
+          type: string
+          enum: [VIREMENT, CHEQUE, ESPECES, MOBILE_MONEY]
+        date_paiement:
+          type: string
+          format: date
+        reference:
+          type: string
+          nullable: true
+        ecriture_id:
+          type: integer
+          nullable: true
+          description: Écriture de trésorerie générée automatiquement
+        created_at:
+          type: string
+          format: date-time
+
+    PaiementCreate:
+      type: object
+      required: [facture_id, montant, mode_paiement, date_paiement]
+      properties:
+        facture_id:
+          type: integer
+        montant:
+          type: string
+          format: decimal
+        mode_paiement:
+          type: string
+          enum: [VIREMENT, CHEQUE, ESPECES, MOBILE_MONEY]
+        date_paiement:
+          type: string
+          format: date
+        reference:
+          type: string
+
+    PaginatedPaiements:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Paiement'
+
+    # ── ÉTATS FINANCIERS ─────────────────────────────────────
+
+    LigneGrandLivre:
+      type: object
+      properties:
+        date_ecriture:
+          type: string
+          format: date
+        libelle:
+          type: string
+        journal_code:
+          type: string
+        debit:
+          type: string
+          format: decimal
+        credit:
+          type: string
+          format: decimal
+        solde_cumule:
+          type: string
+          format: decimal
+
+    GrandLivre:
+      type: object
+      properties:
+        exercice_id:
+          type: integer
+        compte_numero:
+          type: string
+        compte_libelle:
+          type: string
+        solde_initial:
+          type: string
+          format: decimal
+        total_debit:
+          type: string
+          format: decimal
+        total_credit:
+          type: string
+          format: decimal
+        solde_final:
+          type: string
+          format: decimal
+        lignes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneGrandLivre'
+
+    LigneBalance:
+      type: object
+      properties:
+        compte_numero:
+          type: string
+        compte_libelle:
+          type: string
+        classe:
+          type: integer
+        total_debit:
+          type: string
+          format: decimal
+        total_credit:
+          type: string
+          format: decimal
+        solde_debiteur:
+          type: string
+          format: decimal
+        solde_crediteur:
+          type: string
+          format: decimal
+
+    Balance:
+      type: object
+      properties:
+        exercice_id:
+          type: integer
+        devise:
+          type: string
+        total_debit:
+          type: string
+          format: decimal
+        total_credit:
+          type: string
+          format: decimal
+        lignes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneBalance'
+
+    BilanOHADA:
+      type: object
+      properties:
+        exercice_id:
+          type: integer
+        devise:
+          type: string
+        actif:
+          type: object
+          properties:
+            immobilisations:
+              type: string
+              format: decimal
+              description: Classe 2
+            actif_circulant:
+              type: string
+              format: decimal
+              description: Classe 3-4 actif
+            tresorerie_actif:
+              type: string
+              format: decimal
+              description: Classe 5 débiteur
+            total_actif:
+              type: string
+              format: decimal
+        passif:
+          type: object
+          properties:
+            capitaux_propres:
+              type: string
+              format: decimal
+              description: Classe 1
+            dettes:
+              type: string
+              format: decimal
+              description: Classe 4 passif
+            tresorerie_passif:
+              type: string
+              format: decimal
+              description: Classe 5 créditeur
+            total_passif:
+              type: string
+              format: decimal
+        equilibre:
+          type: boolean
+          description: total_actif == total_passif
+
+    CompteResultat:
+      type: object
+      properties:
+        exercice_id:
+          type: integer
+        devise:
+          type: string
+        produits:
+          type: object
+          properties:
+            chiffre_affaires:
+              type: string
+              format: decimal
+              description: Classe 7
+            autres_produits:
+              type: string
+              format: decimal
+            total_produits:
+              type: string
+              format: decimal
+        charges:
+          type: object
+          properties:
+            charges_exploitation:
+              type: string
+              format: decimal
+              description: Classe 6
+            autres_charges:
+              type: string
+              format: decimal
+            total_charges:
+              type: string
+              format: decimal
+        resultat_net:
+          type: string
+          format: decimal
+          description: total_produits - total_charges
+
+    # ── LETTRAGE ─────────────────────────────────────────────
+
+    LettrageRequest:
+      type: object
+      required: [ligne_ids]
+      properties:
+        ligne_ids:
+          type: array
+          minItems: 2
+          items:
+            type: integer
+          description: IDs des LigneEcriture à lettrer (min. 2)
+
+    LettrageResponse:
+      type: object
+      properties:
+        code_lettrage:
+          type: string
+          example: "A"
+        nb_lignes:
+          type: integer
+        total_debit:
+          type: string
+          format: decimal
+        total_credit:
+          type: string
+          format: decimal
+        lignes:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneEcriture'
+
+    DelettrerRequest:
+      type: object
+      required: [code_lettrage]
+      properties:
+        code_lettrage:
+          type: string
+          description: Code de lettrage à effacer (ex. "A", "AA")
+
+    LigneLettrage:
+      type: object
+      properties:
+        id:
+          type: integer
+        ecriture_id:
+          type: integer
+        ecriture_date:
+          type: string
+          format: date
+        ecriture_libelle:
+          type: string
+        compte_id:
+          type: integer
+        compte_numero:
+          type: string
+        libelle:
+          type: string
+        debit:
+          type: string
+          format: decimal
+        credit:
+          type: string
+          format: decimal
+        lettre:
+          type: string
+          nullable: true
+
+    PaginatedLignesLettrage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LigneLettrage'
+
+    # ── IMMOBILISATIONS ──────────────────────────────────────
+
+    Immobilisation:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          example: "IMM-2024-001"
+        designation:
+          type: string
+          example: "Serveur Dell PowerEdge"
+        categorie:
+          type: string
+          enum: [INCORPORELLE, TERRAIN, CONSTRUCTION, MATERIEL, MOBILIER, VEHICULE, FINANCIERE]
+        numero_compte:
+          type: string
+          example: "2354"
+          description: Compte OHADA Classe 2
+        fournisseur:
+          type: string
+          nullable: true
+        reference_facture:
+          type: string
+          nullable: true
+        valeur_origine:
+          type: string
+          format: decimal
+          example: "2500000.00"
+        valeur_residuelle:
+          type: string
+          format: decimal
+          example: "0.00"
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+        methode:
+          type: string
+          enum: [LINEAIRE, DEGRESSIF, NON_AMORTISSABLE]
+        duree_vie:
+          type: integer
+          description: Durée d'utilisation en années
+        date_mise_en_service:
+          type: string
+          format: date
+        cumul_amortissements:
+          type: string
+          format: decimal
+          readOnly: true
+        valeur_nette_comptable:
+          type: string
+          format: decimal
+          readOnly: true
+          description: valeur_origine - cumul_amortissements
+        taux_lineaire:
+          type: string
+          format: decimal
+          readOnly: true
+          description: 1 / duree_vie (en %)
+        statut:
+          type: string
+          enum: [ACTIVE, AMORTIE, CEDEE]
+        date_cession:
+          type: string
+          format: date
+          nullable: true
+        valeur_nette_cession:
+          type: string
+          format: decimal
+          nullable: true
+        exercice_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ImmobilisationCreate:
+      type: object
+      required: [designation, categorie, valeur_origine, date_mise_en_service, duree_vie, methode, exercice_id]
+      properties:
+        designation:
+          type: string
+        categorie:
+          type: string
+          enum: [INCORPORELLE, TERRAIN, CONSTRUCTION, MATERIEL, MOBILIER, VEHICULE, FINANCIERE]
+        numero_compte:
+          type: string
+          description: Optionnel — calculé depuis la catégorie si absent
+        fournisseur:
+          type: string
+        reference_facture:
+          type: string
+        valeur_origine:
+          type: string
+          format: decimal
+        valeur_residuelle:
+          type: string
+          format: decimal
+          default: "0.00"
+        devise:
+          type: string
+          enum: [XAF, EUR, USD]
+          default: XAF
+        methode:
+          type: string
+          enum: [LINEAIRE, DEGRESSIF, NON_AMORTISSABLE]
+          default: LINEAIRE
+        duree_vie:
+          type: integer
+          minimum: 1
+          maximum: 50
+        date_mise_en_service:
+          type: string
+          format: date
+        exercice_id:
+          type: integer
+
+    ImmobilisationUpdate:
+      type: object
+      properties:
+        designation:
+          type: string
+        fournisseur:
+          type: string
+        reference_facture:
+          type: string
+        valeur_residuelle:
+          type: string
+          format: decimal
+
+    PaginatedImmobilisations:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Immobilisation'
+
+    DotationAmortissement:
+      type: object
+      properties:
+        id:
+          type: integer
+        immobilisation_id:
+          type: integer
+        immobilisation_designation:
+          type: string
+        annee:
+          type: integer
+        montant:
+          type: string
+          format: decimal
+          description: Annuité calculée (linéaire ou dégressif)
+        ecriture_id:
+          type: integer
+          nullable: true
+          description: Écriture 6811/28xx générée
+        date_comptabilisation:
+          type: string
+          format: date-time
+          nullable: true
+
+    PaginatedDotations:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DotationAmortissement'
+
+    PlanAmortissementLigne:
+      type: object
+      properties:
+        annee:
+          type: integer
+        vnc_debut:
+          type: string
+          format: decimal
+          description: Valeur nette comptable en début d'exercice
+        annuite:
+          type: string
+          format: decimal
+          description: Dotation calculée pour l'année
+        cumul:
+          type: string
+          format: decimal
+          description: Cumul des amortissements en fin d'exercice
+        vnc_fin:
+          type: string
+          format: decimal
+          description: Valeur nette comptable en fin d'exercice
+        comptabilisee:
+          type: boolean
+          description: True si la dotation a été comptabilisée (écriture générée)
+
+    PlanAmortissement:
+      type: object
+      properties:
+        immobilisation_id:
+          type: integer
+        designation:
+          type: string
+        methode:
+          type: string
+          enum: [LINEAIRE, DEGRESSIF, NON_AMORTISSABLE]
+        valeur_origine:
+          type: string
+          format: decimal
+        duree_vie:
+          type: integer
+        taux_lineaire:
+          type: string
+          format: decimal
+        plan:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanAmortissementLigne'
+
+    # ── ERREURS ──────────────────────────────────────────────
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token JWT absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permissions insuffisantes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
